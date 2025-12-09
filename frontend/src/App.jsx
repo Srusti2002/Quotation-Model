@@ -1,17 +1,27 @@
+// App.jsx
 import React, { useState } from "react";
-import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
 import { ConfigProvider } from "antd";
 import {
+  HomeOutlined,
   FileTextOutlined,
   ShoppingCartOutlined,
-  UserOutlined,
-  FileDoneOutlined,
-  BarChartOutlined,
-  SettingOutlined,
+  PlusOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  HomeOutlined,
 } from "@ant-design/icons";
+
+// ALL YOUR PAGES — CORRECT FILENAMES!
+import QuotationsPage from "./pages/QuotationsPage";
+import ItemsPage from "./pages/ItemsPage";
+import ChargesPage from "./pages/ChargesPage";
+import Addquotation from "./pages/Addquotation";
 
 // -----------------------
 // Sidebar Component
@@ -21,12 +31,10 @@ const Sidebar = ({ collapsed, onToggle }) => {
   const location = useLocation();
 
   const menuItems = [
-    { title: "Quotations", icon: HomeOutlined, path: "/" },
-    { title: "Charges", icon: FileTextOutlined, path: "/quotations" },
-    { title: "Items", icon: ShoppingCartOutlined, path: "/Items" },
-    
-    
-
+    { title: "Quotations List", icon: HomeOutlined, path: "/quotations" },
+    { title: "Charges", icon: FileTextOutlined, path: "/charges" },
+    { title: "Items Columns", icon: ShoppingCartOutlined, path: "/items" },
+    { title: "Add Quotation", icon: PlusOutlined, path: "/quotations/new" },
   ];
 
   return (
@@ -39,13 +47,12 @@ const Sidebar = ({ collapsed, onToggle }) => {
         position: "fixed",
         left: 0,
         top: 0,
-        overflow: "hidden",
         transition: "width 0.3s ease",
         display: "flex",
         flexDirection: "column",
       }}
     >
-      {/* Header with toggle */}
+      {/* Header */}
       <div
         style={{
           padding: "16px",
@@ -55,7 +62,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
           borderBottom: "1px solid rgba(255,255,255,0.1)",
         }}
       >
-        {!collapsed && <h3 style={{ margin: 0 }}>Quotation</h3>}
+        {!collapsed && <h3 style={{ margin: 0, color: "#fff" }}>Quotation</h3>}
         <button
           onClick={onToggle}
           style={{
@@ -70,8 +77,8 @@ const Sidebar = ({ collapsed, onToggle }) => {
         </button>
       </div>
 
-      {/* Menu items */}
-      <div style={{ flex: 1, overflow: "auto" }}>
+      {/* Menu Items */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
         {menuItems.map((item, index) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
@@ -81,21 +88,14 @@ const Sidebar = ({ collapsed, onToggle }) => {
               key={index}
               onClick={() => navigate(item.path)}
               style={{
-                padding: "12px 16px",
+                padding: "12px 20px",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
                 gap: "12px",
                 backgroundColor: isActive ? "rgba(24, 144, 255, 0.2)" : "transparent",
                 borderLeft: isActive ? "3px solid #1890ff" : "3px solid transparent",
-                transition: "all 0.3s ease",
-                whiteSpace: "nowrap",
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)";
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) e.currentTarget.style.backgroundColor = "transparent";
+                transition: "all 0.3s",
               }}
             >
               <Icon style={{ fontSize: "18px" }} />
@@ -109,64 +109,6 @@ const Sidebar = ({ collapsed, onToggle }) => {
 };
 
 // -----------------------
-// Menu Card Component
-// -----------------------
-const MenuCard = ({ title, icon: Icon, onClick }) => {
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        padding: "20px",
-        borderRadius: "8px",
-        backgroundColor: "#fff",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        cursor: "pointer",
-        textAlign: "center",
-        transition: "0.3s",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
-        e.currentTarget.style.transform = "translateY(-2px)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
-        e.currentTarget.style.transform = "translateY(0)";
-      }}
-    >
-      <div style={{ fontSize: "24px", marginBottom: "10px" }}>
-        <Icon style={{ color: "#1890ff" }} />
-      </div>
-
-      <div style={{ fontSize: "16px", fontWeight: "bold" }}>
-        {title}
-      </div>
-    </div>
-  );
-};
-
-// -----------------------
-// Home Page Component
-// -----------------------
-const HomePage = () => {
-  return (
-    <div style={{ padding: "40px" }}>
-      <h2>Welcome to Charges Table</h2>
-      <p>Select an option from the sidebar to get started.</p>
-    </div>
-  );
-};
-
-// Import your ChargesPage here
-import ChargesPage from "./pages/ChargesPage";
-
-// Placeholder pages (replace with your actual pages)
-const OrdersPage = () => <div style={{ padding: "40px" }}><h2>Orders Page</h2></div>;
-const CustomersPage = () => <div style={{ padding: "40px" }}><h2>Customers Page</h2></div>;
-const InvoicesPage = () => <div style={{ padding: "40px" }}><h2>Invoices Page</h2></div>;
-const ReportsPage = () => <div style={{ padding: "40px" }}><h2>Reports Page</h2></div>;
-const SettingsPage = () => <div style={{ padding: "40px" }}><h2>Settings Page</h2></div>;
-
-// -----------------------
 // Layout Component
 // -----------------------
 const Layout = ({ collapsed, onToggle, children }) => {
@@ -177,9 +119,9 @@ const Layout = ({ collapsed, onToggle, children }) => {
         style={{
           marginLeft: collapsed ? "80px" : "250px",
           flex: 1,
-          transition: "margin-left 0.3s ease",
           backgroundColor: "#f5f5f5",
           minHeight: "100vh",
+          transition: "margin-left 0.3s ease",
         }}
       >
         {children}
@@ -189,7 +131,17 @@ const Layout = ({ collapsed, onToggle, children }) => {
 };
 
 // -----------------------
-// App Component
+// Home Page
+// -----------------------
+const HomePage = () => (
+  <div style={{ padding: "40px", textAlign: "center" }}>
+    <h1>Welcome to Quotation System</h1>
+    <p>Use the sidebar to navigate.</p>
+  </div>
+);
+
+// -----------------------
+// Main App
 // -----------------------
 export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -203,11 +155,10 @@ export default function App() {
         >
           <Routes>
             <Route path="/" element={<HomePage />} />
-            <Route path="/quotations" element={<ChargesPage />} />
-            <Route path="/orders" element={<OrdersPage />} />
-            <Route path="/customers" element={<CustomersPage />} />
-            <Route path="/invoices" element={<InvoicesPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/charges" element={<ChargesPage />} />
+            <Route path="/quotations" element={<QuotationsPage />} />
+            <Route path="/items" element={<ItemsPage />} />
+            <Route path="/quotations/new" element={<Addquotation />} />
             
           </Routes>
         </Layout>
