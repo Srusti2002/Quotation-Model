@@ -24,205 +24,14 @@ DATABASE_URL = "postgresql://postgres:Srusti%40123@localhost:5432/Quotation"
 engine = create_engine(DATABASE_URL)
 metadata = MetaData()
 
-# Base table
-users_table = Table(
-    "users",
-    metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("username", String),
-    Column("password", String)
-)
-
 metadata.create_all(engine)
 
-# --------------------------
-# Pydantic Models
-# --------------------------
-class AddColumnRequest(BaseModel):
-    column_name: str
-    column_type: str = "string"
 
-class DeleteColumnRequest(BaseModel):
-    column_name: str
-
-class UpdateUserField(BaseModel):
-    user_id: int
-    column_name: str
-    value: str | int | None
-
-
-class UpdateSubGroup(BaseModel):
-    user_id: int
-    sub_group: str
-
-
-# --------------------------
-# Helper: Get Table Columns
-# --------------------------
-def get_current_columns():
-    query = """
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_name='users'
-    """
-    with engine.connect() as conn:
-        result = conn.execute(text(query))
-        return [row[0] for row in result]
-
-
-# --------------------------
-# List Columns
-# --------------------------
-@app.get("/columns")
-def list_columns():
-    return {"columns": get_current_columns()}
-
-
-# --------------------------
-# Add Column
-# --------------------------
-@app.post("/add-column")
-def add_column(req: AddColumnRequest):
-    col = req.column_name.strip().lower()
-
-    if not col.isidentifier():
-        raise HTTPException(status_code=400, detail="Invalid column name")
-
-    if col in get_current_columns():
-        raise HTTPException(status_code=400, detail="Column already exists")
-
-    type_map = {
-        "string": "VARCHAR",
-        "int": "INTEGER",
-        "integer": "INTEGER",
-        "boolean": "BOOLEAN",
-        "bool": "BOOLEAN"
-    }
-
-    sql_type = type_map.get(req.column_type.lower())
-    if sql_type is None:
-        raise HTTPException(status_code=400, detail="Unsupported column type")
-
-    sql = f"ALTER TABLE users ADD COLUMN {col} {sql_type};"
-
-    try:
-        with engine.begin() as conn:
-            conn.execute(text(sql))
-        return {"status": "success", "added": col}
-
-    except SQLAlchemyError as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# --------------------------
-# Delete Column
-# --------------------------
-@app.post("/delete-column")
-def delete_column(req: DeleteColumnRequest):
-    col = req.column_name.strip().lower()
-
-    if col == "id":
-        raise HTTPException(status_code=400, detail="Cannot delete ID column")
-
-    if col not in get_current_columns():
-        raise HTTPException(status_code=404, detail="Column does not exist")
-
-    sql = f"ALTER TABLE users DROP COLUMN {col};"
-
-    try:
-        with engine.begin() as conn:
-            conn.execute(text(sql))
-        return {"status": "success", "deleted": col}
-
-    except SQLAlchemyError as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# --------------------------
-# Create User (Dynamic)
-# --------------------------
-@app.post("/users")
-def create_user(data: dict = Body(...)):
-    allowed_columns = get_current_columns()
-    allowed_columns.remove("id")
-
-    insert_values = {col: data.get(col, None) for col in allowed_columns}
-
-    columns_sql = ", ".join(insert_values.keys())
-    params_sql = ", ".join([f":{k}" for k in insert_values.keys()])
-
-    sql = text(f"""
-        INSERT INTO users ({columns_sql})
-        VALUES ({params_sql})
-        RETURNING id
-    """)
-
-    try:
-        with engine.begin() as conn:
-            result = conn.execute(sql, insert_values)
-            new_id = result.scalar()
-        return {"created_id": new_id}
-
-    except SQLAlchemyError as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# --------------------------
-# Get Users
-# --------------------------
-@app.get("/users")
-def list_users():
-    sql = text("SELECT * FROM users")
-
-    with engine.connect() as conn:
-        rows = conn.execute(sql).fetchall()
-
-    return [dict(row._mapping) for row in rows]
-
-
-class RenameColumnRequest(BaseModel):
-    old_name: str
-    new_name: str
-
-
-@app.post("/rename-column")
-def rename_column(req: RenameColumnRequest):
-    old = req.old_name.strip().lower()
-    new = req.new_name.strip().lower()
-
-    # Validate identifiers
-    if not old.isidentifier() or not new.isidentifier():
-        raise HTTPException(status_code=400, detail="Invalid column name format")
-
-    current_columns = get_current_columns()
-
-    # Check old column exists
-    if old not in current_columns:
-        raise HTTPException(status_code=404, detail="Old column does not exist")
-
-    # Prevent renaming the primary key
-    if old == "id":
-        raise HTTPException(status_code=400, detail="Cannot rename ID column")
-
-    # Check new column does not already exist
-    if new in current_columns:
-        raise HTTPException(status_code=400, detail="New column name already exists")
-
-    # SQL for renaming
-    sql = f"ALTER TABLE users RENAME COLUMN {old} TO {new};"
-
-    try:
-        with engine.begin() as conn:
-            conn.execute(text(sql))
-        return {"status": "success", "renamed_from": old, "renamed_to": new}
-
-    except SQLAlchemyError as e:
-        raise HTTPException(status_code=500, detail=str(e))
     
     
     
     
-    # --------------------------
+# --------------------------
 # Charges Table Setup
 # --------------------------
 charges_table = Table(
@@ -516,12 +325,22 @@ metadata.create_all(engine)
 # ---------------------- Helper -------------------------
 def get_quotation_columns():
     query = """
-        SELECT column_name FROM information_schema.columns
-        WHERE table_name='quotation'
+        SELECT 
+            column_name,
+            data_type
+        FROM information_schema.columns
+        WHERE table_name = 'quotation'
+        ORDER BY ordinal_position
     """
     with engine.connect() as conn:
         result = conn.execute(text(query))
-        return [row[0] for row in result]
+        return [
+            {
+                "column_name": row[0],
+                "data_type": row[1]
+            }
+            for row in result
+        ]
     
   # ---------------------- List Quotation Columns -------------------------
 @app.get("/quotation/columns")
@@ -649,9 +468,6 @@ def add_quotation_column(req: QuotationColumnRequest):
 def delete_quotation_column(req: QuotationDeleteColumnRequest):
     col = req.column_name.strip().lower()
 
-    if col == "id":
-        raise HTTPException(status_code=400, detail="Cannot delete ID")
-
     if col not in get_quotation_columns():
         raise HTTPException(status_code=404, detail="Column does not exist")
 
@@ -711,12 +527,22 @@ metadata.create_all(engine)
 # ---------------------- Helper -------------------------
 def get_items_columns():
     query = """
-        SELECT column_name FROM information_schema.columns
-        WHERE table_name='items'
+        SELECT 
+            column_name,
+            data_type
+        FROM information_schema.columns
+        WHERE table_name = 'items'
+        ORDER BY ordinal_position
     """
     with engine.connect() as conn:
         result = conn.execute(text(query))
-        return [row[0] for row in result]
+        return [
+            {
+                "column_name": row[0],
+                "data_type": row[1]
+            }
+            for row in result
+        ]
     
     # ---------------------- List Items Columns -------------------------
 @app.get("/items/columns")
@@ -890,4 +716,383 @@ def rename_items_column(req: ItemRenameColumnRequest):
 
     return {"status": "success", "renamed_from": old, "renamed_to": new}
 
+# Add these models and endpoints to your existing code
+
+from typing import List, Optional
+
+# ============================================================
+#          PYDANTIC MODELS FOR QUOTATION WITH ITEMS
+# ============================================================
+
+class ItemData(BaseModel):
+    sample_activity: Optional[str] = None
+    specification: Optional[str] = None
+    hsn_sac_code: Optional[str] = None
+    qty: Optional[int] = None
+    unit: Optional[str] = None
+    unit_rate: Optional[int] = None
+    total_cost: Optional[int] = None
+
+
+class QuotationWithItemsRequest(BaseModel):
+    quotation_data: dict
+    items_data: List[dict]
+
+
+class UpdateQuotationWithItemsRequest(BaseModel):
+    quotation_data: Optional[dict] = None
+    items_data: Optional[List[dict]] = None
+    items_to_delete: Optional[List[int]] = None
+
+
+# ============================================================
+#         CREATE QUOTATION WITH ITEMS (POST)
+# ============================================================
+
+from sqlalchemy import text, inspect
+from fastapi import HTTPException
+from sqlalchemy.exc import SQLAlchemyError
+
+@app.post("/quotation-with-items")
+def create_quotation_with_items(req: QuotationWithItemsRequest):
+    try:
+        # Use SQLAlchemy inspector to get real column names safely
+        inspector = inspect(engine)
+        
+        quotation_columns_all = [col["name"] for col in inspector.get_columns("quotation")]
+        items_columns_all = [col["name"] for col in inspector.get_columns("items")]
+
+        # Exclude 'id' safely
+        quotation_cols = [col for col in quotation_columns_all if col != "id"]
+        items_cols = [col for col in items_columns_all if col != "id"]
+
+        # Prepare quotation data (only allowed columns)
+        quotation_vals = {c: req.quotation_data.get(c) for c in quotation_cols}
+
+        col_sql = ", ".join(quotation_vals.keys())
+        param_sql = ", ".join(f":{k}" for k in quotation_vals.keys())
+
+        quotation_sql = text(f"""
+            INSERT INTO quotation ({col_sql})
+            VALUES ({param_sql})
+            RETURNING id
+        """)
+
+        with engine.begin() as conn:
+            # Insert quotation
+            result = conn.execute(quotation_sql, quotation_vals)
+            quotation_id = result.scalar()
+
+            created_items = []
+
+            for item_data in req.items_data:
+                item_vals = {c: item_data.get(c) for c in items_cols}
+                item_vals["quotation_id"] = quotation_id  # Add foreign key
+
+                item_col_sql = ", ".join(item_vals.keys())
+                item_param_sql = ", ".join(f":{k}" for k in item_vals.keys())
+
+                item_sql = text(f"""
+                    INSERT INTO items ({item_col_sql})
+                    VALUES ({item_param_sql})
+                    RETURNING id
+                """)
+
+                item_result = conn.execute(item_sql, item_vals)
+                item_id = item_result.scalar()
+                created_items.append(item_id)
+
+        return {
+            "status": "success",
+            "quotation_id": quotation_id,
+            "items_created": len(created_items),
+            "item_ids": created_items
+        }
+
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+
+# ============================================================
+#         GET QUOTATION WITH ITEMS (GET)
+# ============================================================
+
+@app.get("/quotation-with-items/{quotation_id}")
+def get_quotation_with_items(quotation_id: int):
+    """
+    Retrieve a quotation along with all its items.
     
+    Example: GET /quotation-with-items/1
+    """
+    
+    quotation_sql = text("SELECT * FROM quotation WHERE id = :qid")
+    items_sql = text("SELECT * FROM items WHERE quotation_id = :qid")
+    
+    try:
+        with engine.connect() as conn:
+            # Get quotation
+            quotation_row = conn.execute(quotation_sql, {"qid": quotation_id}).fetchone()
+            
+            if quotation_row is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Quotation with ID {quotation_id} not found"
+                )
+            
+            # Get all items for this quotation
+            items_rows = conn.execute(items_sql, {"qid": quotation_id}).fetchall()
+        
+        return {
+            "quotation": dict(quotation_row._mapping),
+            "items": [dict(item._mapping) for item in items_rows]
+        }
+        
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+#         GET ALL QUOTATIONS WITH ITEMS (GET)
+# ============================================================
+
+@app.get("/quotation-with-items")
+def get_all_quotations_with_items():
+    """
+    Retrieve all quotations along with their items.
+    """
+    
+    quotation_sql = text("SELECT * FROM quotation")
+    items_sql = text("SELECT * FROM items WHERE quotation_id = :qid")
+    
+    try:
+        with engine.connect() as conn:
+            # Get all quotations
+            quotation_rows = conn.execute(quotation_sql).fetchall()
+            
+            result = []
+            for quotation_row in quotation_rows:
+                quotation_dict = dict(quotation_row._mapping)
+                qid = quotation_dict["id"]
+                
+                # Get items for this quotation
+                items_rows = conn.execute(items_sql, {"qid": qid}).fetchall()
+                
+                result.append({
+                    "quotation": quotation_dict,
+                    "items": [dict(item._mapping) for item in items_rows]
+                })
+        
+        return result
+        
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+#         UPDATE QUOTATION WITH ITEMS (PUT)
+# ============================================================
+
+@app.put("/quotation-with-items/{quotation_id}")
+def update_quotation_with_items(quotation_id: int, req: UpdateQuotationWithItemsRequest):
+    """
+    Update a quotation and its items.
+    Can update quotation data, add new items, update existing items, or delete items.
+    
+    Example payload:
+    {
+        "quotation_data": {
+            "customer_name": "Updated Corp",
+            "mobile_number": "9876543210"
+        },
+        "items_data": [
+            {
+                "id": 1,  // If id exists, update this item
+                "sample_activity": "Updated Testing",
+                "qty": 15
+            },
+            {
+                // If no id, create new item
+                "sample_activity": "New Activity",
+                "qty": 5
+            }
+        ],
+        "items_to_delete": [3, 4]  // Delete items with these IDs
+    }
+    """
+    
+    try:
+        with engine.begin() as conn:
+            # Step 1: Verify quotation exists
+            check_sql = text("SELECT 1 FROM quotation WHERE id = :qid")
+            exists = conn.execute(check_sql, {"qid": quotation_id}).fetchone()
+            
+            if not exists:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Quotation with ID {quotation_id} not found"
+                )
+            
+            updated_sections = []
+            
+            # Step 2: Update quotation data if provided
+            if req.quotation_data:
+                quotation_cols = get_quotation_columns()
+                
+                for col, value in req.quotation_data.items():
+                    col_lower = col.lower()
+                    if col_lower in quotation_cols and col_lower != "id":
+                        update_sql = text(f"UPDATE quotation SET {col_lower} = :v WHERE id = :qid")
+                        conn.execute(update_sql, {"v": value, "qid": quotation_id})
+                
+                updated_sections.append("quotation_data")
+            
+            # Step 3: Delete items if specified
+            deleted_items = []
+            if req.items_to_delete:
+                for item_id in req.items_to_delete:
+                    # Verify item belongs to this quotation
+                    verify_sql = text("""
+                        SELECT 1 FROM items 
+                        WHERE id = :iid AND quotation_id = :qid
+                    """)
+                    belongs = conn.execute(
+                        verify_sql, 
+                        {"iid": item_id, "qid": quotation_id}
+                    ).fetchone()
+                    
+                    if belongs:
+                        delete_sql = text("DELETE FROM items WHERE id = :iid")
+                        conn.execute(delete_sql, {"iid": item_id})
+                        deleted_items.append(item_id)
+                
+                if deleted_items:
+                    updated_sections.append("deleted_items")
+            
+            # Step 4: Update or create items
+            updated_items = []
+            created_items = []
+            
+            if req.items_data:
+                items_cols = get_items_columns()
+                items_cols.remove("id")
+                
+                for item_data in req.items_data:
+                    item_id = item_data.get("id")
+                    
+                    if item_id:
+                        # Update existing item
+                        # Verify item belongs to this quotation
+                        verify_sql = text("""
+                            SELECT 1 FROM items 
+                            WHERE id = :iid AND quotation_id = :qid
+                        """)
+                        belongs = conn.execute(
+                            verify_sql,
+                            {"iid": item_id, "qid": quotation_id}
+                        ).fetchone()
+                        
+                        if not belongs:
+                            continue  # Skip if item doesn't belong to this quotation
+                        
+                        # Update each field
+                        for col, value in item_data.items():
+                            col_lower = col.lower()
+                            if col_lower in items_cols and col_lower != "quotation_id":
+                                update_sql = text(f"UPDATE items SET {col_lower} = :v WHERE id = :iid")
+                                conn.execute(update_sql, {"v": value, "iid": item_id})
+                        
+                        updated_items.append(item_id)
+                    
+                    else:
+                        # Create new item
+                        item_vals = {c: item_data.get(c, None) for c in items_cols}
+                        item_vals["quotation_id"] = quotation_id
+                        
+                        item_col_sql = ", ".join(item_vals.keys())
+                        item_param_sql = ", ".join([f":{k}" for k in item_vals.keys()])
+                        
+                        item_sql = text(f"""
+                            INSERT INTO items ({item_col_sql})
+                            VALUES ({item_param_sql})
+                            RETURNING id
+                        """)
+                        
+                        result = conn.execute(item_sql, item_vals)
+                        new_item_id = result.scalar()
+                        created_items.append(new_item_id)
+                
+                if updated_items:
+                    updated_sections.append("updated_items")
+                if created_items:
+                    updated_sections.append("created_items")
+        
+        return {
+            "status": "success",
+            "quotation_id": quotation_id,
+            "updated_sections": updated_sections,
+            "items_updated": len(updated_items),
+            "items_created": len(created_items),
+            "items_deleted": len(deleted_items),
+            "updated_item_ids": updated_items,
+            "created_item_ids": created_items,
+            "deleted_item_ids": deleted_items
+        }
+        
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+#         DELETE QUOTATION WITH ITEMS (DELETE)
+# ============================================================
+
+@app.delete("/quotation-with-items/{quotation_id}")
+def delete_quotation_with_items(quotation_id: int):
+    """
+    Delete a quotation along with all its related items.
+    
+    Example: DELETE /quotation-with-items/1
+    """
+    
+    check_sql = text("SELECT 1 FROM quotation WHERE id = :qid")
+    count_items_sql = text("SELECT COUNT(*) FROM items WHERE quotation_id = :qid")
+    delete_items_sql = text("DELETE FROM items WHERE quotation_id = :qid")
+    delete_quotation_sql = text("DELETE FROM quotation WHERE id = :qid")
+    
+    try:
+        with engine.begin() as conn:
+            # Check if quotation exists
+            exists = conn.execute(check_sql, {"qid": quotation_id}).fetchone()
+            
+            if not exists:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Quotation with ID {quotation_id} not found"
+                )
+            
+            # Count items to be deleted
+            items_count = conn.execute(count_items_sql, {"qid": quotation_id}).scalar()
+            
+            # Delete all items first (foreign key constraint)
+            conn.execute(delete_items_sql, {"qid": quotation_id})
+            
+            # Delete quotation
+            conn.execute(delete_quotation_sql, {"qid": quotation_id})
+        
+        return {
+            "status": "success",
+            "message": f"Quotation {quotation_id} and its {items_count} items deleted successfully",
+            "quotation_id": quotation_id,
+            "items_deleted": items_count
+        }
+        
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=str(e))

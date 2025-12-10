@@ -1,4 +1,5 @@
 // src/pages/QuotationsPage.jsx
+
 import React, { useState, useEffect } from 'react';
 import {
   Table,
@@ -38,38 +39,40 @@ const REQUIRED_COLUMNS = ['id', 'customer_name', 'enquiry_ref', 'mobile_number']
 
 const QuotationsPage = () => {
   const [data, setData] = useState([]);
-  const [columns, setColumns] = useState([]);
+  const [columns, setColumns] = useState([]); // Array of objects: { column_name, column_type }
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingRowId, setEditingRowId] = useState(null);
-  const [editingColKey, setEditingColKey] = useState(null);
+  const [editingColKey, setEditingColKey] = useState(null); // This will be column_name string
   const [editingValue, setEditingValue] = useState('');
 
   const [form] = Form.useForm();
   const [columnForm] = Form.useForm();
 
-  // Fetch columns
+  // Fetch columns from backend
   const fetchColumns = async () => {
     try {
       const res = await fetch('http://127.0.0.1:8000/quotation/columns');
       const result = await res.json();
       setColumns(result.columns || []);
-    } catch {
+    } catch (err) {
       message.error('Failed to load columns');
+      console.error(err);
     }
   };
 
-  // Fetch data
+  // Fetch quotation data
   const fetchData = async () => {
     setLoading(true);
     try {
       const res = await fetch('http://127.0.0.1:8000/quotation');
       const result = await res.json();
       setData(result);
-    } catch {
+    } catch (err) {
       message.error('Failed to load quotations');
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -94,9 +97,11 @@ const QuotationsPage = () => {
   const handleDelete = async (id) => {
     setDeletingId(id);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/quotation/${id}`, { method: 'DELETE' });
+      const res = await fetch(`http://127.0.0.1:8000/quotation/${id}`, {
+        method: 'DELETE',
+      });
       if (!res.ok) throw new Error();
-      message.success('Deleted');
+      message.success('Quotation deleted');
       fetchData();
     } catch {
       message.error('Delete failed');
@@ -106,10 +111,10 @@ const QuotationsPage = () => {
   };
 
   // Inline editing
-  const startEdit = (record, col) => {
+  const startEdit = (record, columnName) => {
     setEditingRowId(record.id);
-    setEditingColKey(col);
-    setEditingValue(record[col] ?? '');
+    setEditingColKey(columnName);
+    setEditingValue(record[columnName] ?? '');
   };
 
   const cancelEdit = () => {
@@ -129,26 +134,28 @@ const QuotationsPage = () => {
           value: editingValue,
         }),
       });
+
       if (res.ok) {
-        message.success('Updated');
+        message.success('Updated successfully');
         fetchData();
       } else {
         const err = await res.json();
         message.error(err.detail || 'Update failed');
       }
-    } catch {
+    } catch (err) {
       message.error('Update failed');
+      console.error(err);
     } finally {
       cancelEdit();
     }
   };
 
-  // Add Column
+  // Add new column
   const handleAddColumn = async (values) => {
     const name = values.name.trim().toLowerCase().replace(/\s+/g, '_');
-    if (columns.includes(name)) {
+    if (!name) return message.warning('Column name is required');
+    if (columns.some(col => col.column_name === name)) {
       return message.warning('Column already exists');
-      return;
     }
 
     try {
@@ -157,113 +164,152 @@ const QuotationsPage = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ column_name: name, column_type: values.type }),
       });
-      message.success('Column added');
+      message.success('Column added successfully');
       columnForm.resetFields();
       fetchColumns();
       fetchData();
-    } catch {
+    } catch (err) {
       message.error('Failed to add column');
+      console.error(err);
     }
   };
 
-  // Delete Column
-  const handleDeleteColumn = async (col) => {
-    if (REQUIRED_COLUMNS.includes(col)) {
+  // Delete column
+  const handleDeleteColumn = async (columnName) => {
+    if (REQUIRED_COLUMNS.includes(columnName)) {
       return message.warning('Cannot delete required column');
     }
     try {
       await fetch('http://127.0.0.1:8000/quotation/delete-column', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ column_name: col }),
+        body: JSON.stringify({ column_name: columnName }),
       });
       message.success('Column deleted');
       fetchColumns();
       fetchData();
-    } catch {
+    } catch (err) {
       message.error('Failed to delete column');
+      console.error(err);
     }
   };
 
-  // Table columns
+  // Dynamic Table Columns
   const tableColumns = columns
-    .filter((col) => col !== 'id')
-    .map((col) => ({
-      title: col
-        .split('_')
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' '),
-      dataIndex: col,
-      key: col,
-      width: 280,
-      render: (text, record) => {
-        const isEditing = editingRowId === record.id && editingColKey === col;
-        const isMoney = col.includes('charge') || col.includes('price');
-        const isDate = col.includes('date');
+    .filter((col) => col.column_name !== 'id')
+    .map((col) => {
+      const columnName = col.column_name;
 
-        if (isEditing) {
-          return (
-            <Space.Compact style={{ width: '100%' }}>
-              {isDate ? (
-                <Input
-                  type="date"
-                  value={editingValue}
-                  onChange={(e) => setEditingValue(e.target.value)}
-                  autoFocus
-                />
-              ) : isMoney ? (
-                <InputNumber
-                  value={editingValue}
-                  onChange={setEditingValue}
-                  style={{ width: '100%' }}
-                  precision={2}
-                  min={0}
-                  autoFocus
-                />
-              ) : (
-                <Input
-                  value={editingValue}
-                  onChange={(e) => setEditingValue(e.target.value)}
-                  autoFocus
-                />
-              )}
-              <Button
-                type="link"
-                icon={<CheckOutlined style={{ color: 'green' }} />}
-                onClick={saveInlineEdit}
-              />
-              <Button type="link" danger icon={<CloseOutlined />} onClick={cancelEdit} />
-            </Space.Compact>
+      return {
+        title: columnName
+          .split('_')
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' '),
+        dataIndex: columnName,
+        key: columnName,
+        width: 280,
+        render: (text, record) => {
+          const isEditing = editingRowId === record.id && editingColKey === columnName;
+          const isMoney = ['price', 'amount', 'charge', 'total', 'rate'].some(term =>
+            columnName.toLowerCase().includes(term)
           );
-        }
+          const isDate = columnName.toLowerCase().includes('date');
+          const isLongText = ['terms_condition', 'note', 'description', 'remarks'].some(term =>
+            columnName.toLowerCase().includes(term)
+          );
 
-        if (isDate && text) {
-          const d = new Date(text);
-          return isNaN(d.getTime()) ? text : d.toLocaleDateString('en-GB');
-        }
-        if (isMoney && text != null) return `$ ${Number(text).toFixed(2)}`;
-        if (col.includes('terms_condition') && text) {
-          return <div style={{ whiteSpace: 'pre-wrap' }}>{text}</div>;
-        }
-        return text || '-';
-      },
-    }));
+          if (isEditing) {
+            return (
+              <Space.Compact style={{ width: '100%' }}>
+                {isDate ? (
+                  <Input
+                    type="date"
+                    value={editingValue}
+                    onChange={(e) => setEditingValue(e.target.value)}
+                    autoFocus
+                  />
+                ) : isMoney ? (
+                  <InputNumber
+                    value={editingValue}
+                    onChange={setEditingValue}
+                    style={{ width: '100%' }}
+                    precision={2}
+                    min={0}
+                    formatter={(value) => (value ? `$ ${value}` : '')}
+                    parser={(value) => value?.replace(/[^0-9.-]/g, '')}
+                    autoFocus
+                  />
+                ) : isLongText ? (
+                  <TextArea
+                    value={editingValue}
+                    onChange={(e) => setEditingValue(e.target.value)}
+                    autoFocus
+                    rows={3}
+                  />
+                ) : (
+                  <Input
+                    value={editingValue}
+                    onChange={(e) => setEditingValue(e.target.value)}
+                    autoFocus
+                  />
+                )}
+                <Button
+                  type="link"
+                  icon={<CheckOutlined style={{ color: 'green' }} />}
+                  onClick={saveInlineEdit}
+                />
+                <Button type="link" danger icon={<CloseOutlined />} onClick={cancelEdit} />
+              </Space.Compact>
+            );
+          }
 
+          // Display formatting
+          if (isDate && text) {
+            const d = new Date(text);
+            return isNaN(d.getTime()) ? text : d.toLocaleDateString('en-GB');
+          }
+          if (isMoney && text != null) {
+            return `$ ${Number(text).toFixed(2)}`;
+          }
+          if (isLongText && text) {
+            return (
+              <div style={{ whiteSpace: 'pre-wrap', maxWidth: 320, wordBreak: 'break-word' }}>
+                {text}
+              </div>
+            );
+          }
+
+          return text ?? '-';
+        },
+        onCell: (record) => ({
+          onDoubleClick: () => startEdit(record, columnName),
+        }),
+      };
+    });
+
+  // Actions column
   tableColumns.push({
     title: 'Actions',
     key: 'actions',
     fixed: 'right',
     width: 100,
     render: (_, record) => (
-      <Popconfirm title="Delete quotation?" onConfirm={() => handleDelete(record.id)}>
-        <Button
-          danger
-          type="link"
-          size="small"
-          icon={<DeleteOutlined />}
-          loading={deletingId === record.id}
-        />
-      </Popconfirm>
+      <Space>
+        <Popconfirm
+          title="Delete this quotation?"
+          onConfirm={() => handleDelete(record.id)}
+          okText="Yes"
+          cancelText="No"
+        >
+          <Button
+            danger
+            type="text"
+            size="small"
+            icon={<DeleteOutlined />}
+            loading={deletingId === record.id}
+          />
+        </Popconfirm>
+      </Space>
     ),
   });
 
@@ -280,7 +326,7 @@ const QuotationsPage = () => {
         <h2 style={{ margin: 0, fontSize: 28, fontWeight: 600 }}>
           Quotations Management
         </h2>
-        <Button size="large" icon={<SettingOutlined />} onClick={openColumnsDrawer}>
+        <Button size="large" type="primary" icon={<SettingOutlined />} onClick={openColumnsDrawer}>
           Manage Columns
         </Button>
       </div>
@@ -298,46 +344,82 @@ const QuotationsPage = () => {
           dataSource={data}
           rowKey="id"
           loading={loading}
-          scroll={{ x: 'max-content' }}
+          scroll={{ x: 1300 }}
           pagination={{ pageSize: 10 }}
+          bordered
         />
       </div>
 
-      {/* Columns Management Drawer */}
+      {/* Column Management Drawer */}
       <Drawer
         title="Manage Columns"
-        width={500}
+        width={520}
         onClose={closeDrawer}
         open={drawerOpen}
+        destroyOnClose
       >
-        <Form form={columnForm} onFinish={handleAddColumn} layout="inline" style={{ marginBottom: 24 }}>
-          <Form.Item name="name" rules={[{ required: true }]}>
-            <Input placeholder="Column name" style={{ width: 220 }} />
-          </Form.Item>
-          <Form.Item name="type" initialValue="string">
-            <Select style={{ width: 130 }}>
-              {COLUMN_TYPES.map(t => (
-                <Option key={t.value} value={t.value}>{t.label}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Button type="primary" htmlType="submit">Add Column</Button>
+        <Form form={columnForm} onFinish={handleAddColumn} layout="vertical">
+          <Space style={{ width: '100%' }} direction="vertical">
+            <Form.Item
+              name="name"
+              label="Column Name"
+              rules={[{ required: true, message: 'Please enter column name' }]}
+            >
+              <Input placeholder="e.g. total_amount" />
+            </Form.Item>
+            <Form.Item name="type" label="Data Type" initialValue="string">
+              <Select>
+                {COLUMN_TYPES.map((t) => (
+                  <Option key={t.value} value={t.value}>
+                    {t.label}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+            <Button type="primary" htmlType="submit" block>
+              Add Column
+            </Button>
+          </Space>
         </Form>
 
-        <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
+        <div style={{ marginTop: 32, borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
           <Text strong>Existing Columns:</Text>
-          {columns.filter(c => c !== 'id').map(col => (
-            <div key={col} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px dashed #eee' }}>
-              <Text>{col}</Text>
-              {REQUIRED_COLUMNS.includes(col) ? (
-                <Text type="secondary">Required</Text>
-              ) : (
-                <Popconfirm title="Delete column and all data?" onConfirm={() => handleDeleteColumn(col)}>
-                  <Button danger size="small">Delete</Button>
-                </Popconfirm>
-              )}
-            </div>
-          ))}
+          {columns
+            .filter((c) => c.column_name !== 'id')
+            .map((col) => (
+              <div
+                key={col.column_name}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '12px 0',
+                  borderBottom: '1px dashed #eee',
+                }}
+              >
+                <div>
+                  <Text strong>{col.column_name}</Text>
+                  <Text type="secondary" style={{ marginLeft: 8 }}>
+                    ({col.column_type})
+                  </Text>
+                </div>
+                {REQUIRED_COLUMNS.includes(col.column_name) ? (
+                  <Text type="secondary" italic>Required</Text>
+                ) : (
+                  <Popconfirm
+                    title="Delete this column and all its data?"
+                    onConfirm={() => handleDeleteColumn(col.column_name)}
+                    okText="Delete"
+                    cancelText="Cancel"
+                    okButtonProps={{ danger: true }}
+                  >
+                    <Button danger size="small">
+                      Delete
+                    </Button>
+                  </Popconfirm>
+                )}
+              </div>
+            ))}
         </div>
       </Drawer>
     </div>
