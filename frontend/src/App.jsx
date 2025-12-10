@@ -22,6 +22,8 @@ import QuotationsPage from "./pages/QuotationsPage";
 import ItemsPage from "./pages/ItemsPage";
 import ChargesPage from "./pages/ChargesPage";
 import Addquotation from "./pages/Addquotation";
+import "./App.css";
+import Quotation from "./pages/quotation";
 
 // -----------------------
 // Sidebar Component
@@ -31,10 +33,11 @@ const Sidebar = ({ collapsed, onToggle }) => {
   const location = useLocation();
 
   const menuItems = [
-    { title: "Quotations List", icon: HomeOutlined, path: "/quotations" },
+    { title: "Quotations Columns", icon: HomeOutlined, path: "/quotations" },
     { title: "Charges", icon: FileTextOutlined, path: "/charges" },
     { title: "Items Columns", icon: ShoppingCartOutlined, path: "/items" },
     { title: "Add Quotation", icon: PlusOutlined, path: "/quotations/new" },
+    { title: "Quotation", icon: PlusOutlined, path: "/new" },
   ];
 
   return (
@@ -159,7 +162,7 @@ export default function App() {
             <Route path="/quotations" element={<QuotationsPage />} />
             <Route path="/items" element={<ItemsPage />} />
             <Route path="/quotations/new" element={<Addquotation />} />
-            
+            <Route path="/new" element={<Quotation />} />
           </Routes>
         </Layout>
       </Router>

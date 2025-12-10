@@ -683,15 +683,19 @@ def delete_items_column(req: ItemDeleteColumnRequest):
     if col == "id":
         raise HTTPException(status_code=400, detail="Cannot delete ID")
 
-    if col not in get_items_columns():
+    columns = get_items_columns()
+    column_names = [c["column_name"].lower() for c in columns]
+
+    if col not in column_names:
         raise HTTPException(status_code=404, detail="Column does not exist")
 
-    sql = f"ALTER TABLE items DROP COLUMN {col};"
+    sql = text(f'ALTER TABLE items DROP COLUMN "{col}"')
 
     with engine.begin() as conn:
-        conn.execute(text(sql))
+        conn.execute(sql)
 
     return {"status": "success", "deleted": col}
+
 
 
 # Rename Column
@@ -940,7 +944,9 @@ def update_quotation_with_items(quotation_id: int, req: UpdateQuotationWithItems
             
             # Step 2: Update quotation data if provided
             if req.quotation_data:
-                quotation_cols = get_quotation_columns()
+                quotation_cols_data = get_quotation_columns()
+                # Extract just the column names
+                quotation_cols = [col["column_name"].lower() for col in quotation_cols_data]
                 
                 for col, value in req.quotation_data.items():
                     col_lower = col.lower()
@@ -977,8 +983,9 @@ def update_quotation_with_items(quotation_id: int, req: UpdateQuotationWithItems
             created_items = []
             
             if req.items_data:
-                items_cols = get_items_columns()
-                items_cols.remove("id")
+                items_cols_data = get_items_columns()
+                # Extract just the column names, excluding 'id'
+                items_cols = [col["column_name"].lower() for col in items_cols_data if col["column_name"].lower() != "id"]
                 
                 for item_data in req.items_data:
                     item_id = item_data.get("id")

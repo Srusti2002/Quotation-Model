@@ -1,365 +1,416 @@
 // src/pages/ItemsPage.jsx
-import React, { useState, useEffect, useCallback } from 'react';
-import { Table, Input, InputNumber, Select, Button, Popconfirm, Card, Space, message, Typography } from 'antd';
-import { PlusOutlined, DeleteOutlined, ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
 
-const { Title, Text } = Typography;
+import React, { useState, useEffect } from 'react';
+import {
+  Button,
+  Space,
+  Input,
+  InputNumber,
+  message,
+  Drawer,
+  Form,
+  Popconfirm,
+  Select,
+  Typography,
+} from 'antd';
+import {
+  CheckOutlined,
+  CloseOutlined,
+  DeleteOutlined,
+  SettingOutlined,
+} from '@ant-design/icons';
+
+const { TextArea } = Input;
+const { Text } = Typography;
+const { Option } = Select;
+
+const COLUMN_TYPES = [
+  { value: 'text', label: 'TEXT' },
+  { value: 'string', label: 'STRING' },
+  { value: 'integer', label: 'INTEGER' },
+  { value: 'float', label: 'FLOAT' },
+  { value: 'boolean', label: 'BOOLEAN' },
+  { value: 'date', label: 'DATE' },
+];
+
+const REQUIRED_COLUMNS = [
+  'id',
+  'quotation_id',
+  'sample_activity',
+  'specification',
+  'hsn_sac_code',
+  'unit',
+  'unit_rate',
+  'total_cost',
+];
 
 const ItemsPage = () => {
-  const navigate = useNavigate();
-  const [items, setItems] = useState([
-    { key: 'search', isSearchRow: true }
-  ]);
-  const [saving, setSaving] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [data, setData] = useState([]);
+  const [columns, setColumns] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
 
-  // Load saved items from localStorage on component mount
-  useEffect(() => {
-    const loadSavedItems = () => {
-      try {
-        const saved = localStorage.getItem('quotationItems');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setItems([{ key: 'search', isSearchRow: true }, ...parsed]);
-          } else {
-            // Add an empty row if no saved items
-            addRow();
-          }
-        } else {
-          // Add an empty row if no saved items
-          addRow();
-        }
-      } catch (error) {
-        console.error('Error loading saved items:', error);
-        message.error('Failed to load saved items');
-        addRow();
-      }
-    };
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editingRowId, setEditingRowId] = useState(null);
+  const [editingColKey, setEditingColKey] = useState(null);
+  const [editingValue, setEditingValue] = useState('');
 
-    loadSavedItems();
-  }, []);
+  const [columnForm] = Form.useForm();
 
-  // Save items to localStorage whenever they change
-  useEffect(() => {
-    const saveItems = () => {
-      try {
-        const realItems = items.filter(i => !i.isSearchRow);
-        localStorage.setItem('quotationItems', JSON.stringify(realItems));
-      } catch (error) {
-        console.error('Error saving items:', error);
-      }
-    };
-
-    saveItems();
-  }, [items]);
-
-  const addRow = useCallback(() => {
-    setItems(prevItems => [
-      ...prevItems.filter(i => !i.isSearchRow),
-      { 
-        key: Date.now(), 
-        activity: '', 
-        description: '', 
-        spec: '', 
-        qty: 1, 
-        unit: 'Nos', 
-        rate: 0, 
-        total: 0 
-      },
-      { key: 'search', isSearchRow: true }
-    ]);
-  }, []);
-
-  const deleteRow = useCallback((key) => {
-    setItems(prevItems => {
-      const newItems = prevItems.filter(i => i.key !== key);
-      // Make sure we always have at least one item row
-      if (newItems.every(item => item.isSearchRow)) {
-        return [...newItems, { key: Date.now(), activity: '', description: '', spec: '', qty: 1, unit: 'Nos', rate: 0, total: 0 }];
-      }
-      return newItems;
-    });
-  }, []);
-
-  const updateRow = useCallback((key, field, value) => {
-    setItems(prevItems => 
-      prevItems.map(item => {
-        if (item.key === key) {
-          const updated = { 
-            ...item, 
-            [field]: field === 'qty' || field === 'rate' ? parseFloat(value) || 0 : value 
-          };
-          
-          if (field === 'qty' || field === 'rate') {
-            updated.total = (parseFloat(updated.qty) || 0) * (parseFloat(updated.rate) || 0);
-          }
-          
-          return updated;
-        }
-        return item;
-      })
-    );
-  }, []);
-
-  const handleSaveAndContinue = useCallback(() => {
-    const realItems = items.filter(i => !i.isSearchRow);
-    
-    // Validate items
-    for (const item of realItems) {
-      if (!item.activity) {
-        message.warning('Please fill in the Activity field for all items');
-        return;
-      }
-      if (!item.qty || item.qty <= 0) {
-        message.warning('Quantity must be greater than 0');
-        return;
-      }
-      if (item.rate === undefined || item.rate < 0) {
-        message.warning('Rate cannot be negative');
-        return;
-      }
+  // Fetch columns & data
+  const fetchColumns = async () => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/items/columns');
+      const result = await res.json();
+      setColumns(result.columns || []);
+    } catch (err) {
+      message.error('Failed to load columns');
+      console.error(err);
     }
-    
-    setSaving(true);
-    
-    // Simulate API call
-    setTimeout(() => {
-      message.success('Items saved successfully!');
-      setSaving(false);
-      navigate('/add-quotation');
-    }, 500);
-  }, [items, navigate]);
+  };
 
-  // Filter items based on search term
-  const filteredItems = searchTerm 
-    ? items.filter(item => {
-        if (item.isSearchRow) return true;
-        return (
-          (item.activity && item.activity.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (item.spec && item.spec.toLowerCase().includes(searchTerm.toLowerCase()))
-        );
-      })
-    : items;
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('http://127.0.0.1:8000/items');
+      const result = await res.json();
+      setData(result);
+    } catch (err) {
+      message.error('Failed to load items');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const columns = [
-    { 
-      title: 'Sl No', 
-      width: 70, 
-      render: (_, __, idx) => idx === 0 ? '' : idx,
-      fixed: 'left'
-    },
-    { 
-      title: 'Sample/Activity', 
-      width: 250, 
-      fixed: 'left',
-      render: (_, r) => r.isSearchRow ? (
-        <Input 
-          placeholder="Search items..." 
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          style={{ background: '#f5f5f5' }} 
-        />
-      ) : (
-        <Input 
-          value={r.activity} 
-          onChange={e => updateRow(r.key, 'activity', e.target.value)} 
-          placeholder="Enter activity"
-        />
-      ) 
-    },
-    { 
-      title: 'Description', 
-      width: 200,
-      render: (_, r) => r.isSearchRow ? null : (
-        <Input.TextArea 
-          value={r.description} 
-          onChange={e => updateRow(r.key, 'description', e.target.value)}
-          placeholder="Description"
-          autoSize={{ minRows: 1, maxRows: 3 }}
-        />
-      ) 
-    },
-    { 
-      title: 'Spec', 
-      width: 150,
-      render: (_, r) => r.isSearchRow ? null : (
-        <Input 
-          value={r.spec} 
-          onChange={e => updateRow(r.key, 'spec', e.target.value)}
-          placeholder="Specifications"
-        />
-      ) 
-    },
-    { 
-      title: 'Qty', 
-      width: 90, 
-      render: (_, r) => r.isSearchRow ? null : (
-        <InputNumber 
-          min={1} 
-          value={r.qty} 
-          onChange={v => updateRow(r.key, 'qty', v)} 
-          style={{ width: '100%' }} 
-        />
-      ) 
-    },
-    { 
-      title: 'Unit', 
-      width: 100, 
-      render: (_, r) => r.isSearchRow ? null : (
-        <Select 
-          value={r.unit} 
-          onChange={v => updateRow(r.key, 'unit', v)} 
-          style={{ width: '100%' }}
-        >
-          <Select.Option value="Nos">Nos</Select.Option>
-          <Select.Option value="Set">Set</Select.Option>
-          <Select.Option value="Pcs">Pcs</Select.Option>
-          <Select.Option value="Kg">Kg</Select.Option>
-          <Select.Option value="Ltr">Ltr</Select.Option>
-          <Select.Option value="Mtr">Mtr</Select.Option>
-          <Select.Option value="Sq.Ft">Sq.Ft</Select.Option>
-          <Select.Option value="Hrs">Hrs</Select.Option>
-          <Select.Option value="Day">Day</Select.Option>
-        </Select>
-      ) 
-    },
-    { 
-      title: 'Rate (₹)', 
-      width: 150,
-      render: (_, r) => r.isSearchRow ? null : (
-        <InputNumber 
-          prefix="₹" 
-          min={0}
-          value={r.rate} 
-          onChange={v => updateRow(r.key, 'rate', v)} 
-          style={{ width: '100%' }} 
-          step={0.01}
-          precision={2}
-        />
-      ) 
-    },
-    { 
-      title: 'Total (₹)', 
-      width: 120,
-      render: (_, r) => r.isSearchRow ? null : (
-        <Text strong>₹{(r.qty * r.rate).toFixed(2)}</Text>
-      )
-    },
-    { 
-      title: '', 
-      width: 80, 
-      fixed: 'right',
-      render: (_, r) => !r.isSearchRow && (
-        <Popconfirm 
-          title="Are you sure you want to delete this item?" 
-          onConfirm={() => deleteRow(r.key)}
-          okText="Yes"
-          cancelText="No"
-        >
-          <Button 
-            danger 
-            size="small" 
-            icon={<DeleteOutlined />} 
-            style={{ border: 'none' }}
-          />
-        </Popconfirm>
-      ) 
-    },
-  ];
+  useEffect(() => {
+    fetchColumns();
+    fetchData();
+  }, []);
 
-  // Calculate grand total
-  const grandTotal = items.reduce((sum, item) => {
-    if (item.isSearchRow) return sum;
-    return sum + (item.qty || 0) * (item.rate || 0);
-  }, 0);
+  const openColumnsDrawer = () => {
+    setDrawerOpen(true);
+    columnForm.resetFields();
+  };
+
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    columnForm.resetFields();
+  };
+
+  // Delete item
+  const handleDelete = async (id) => {
+    setDeletingId(id);
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/items/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      message.success('Item deleted');
+      fetchData();
+    } catch {
+      message.error('Delete failed');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // Inline editing
+  const startEdit = (record, columnName) => {
+    setEditingRowId(record.id);
+    setEditingColKey(columnName);
+    setEditingValue(record[columnName] ?? '');
+  };
+
+  const cancelEdit = () => {
+    setEditingRowId(null);
+    setEditingColKey(null);
+    setEditingValue('');
+  };
+
+  const saveInlineEdit = async () => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/items/update-field', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          item_id: editingRowId,
+          column_name: editingColKey,
+          value: editingValue,
+        }),
+      });
+
+      if (res.ok) {
+        message.success('Updated successfully');
+        fetchData();
+      } else {
+        const err = await res.json();
+        message.error(err.detail || 'Update failed');
+      }
+    } catch (err) {
+      message.error('Update failed');
+    } finally {
+      cancelEdit();
+    }
+  };
+
+  // Add / Delete column
+  const handleAddColumn = async (values) => {
+    const name = values.name.trim().toLowerCase().replace(/\s+/g, '_');
+    if (!name) return message.warning('Column name required');
+    if (columns.some(c => c.column_name === name)) return message.warning('Column exists');
+
+    try {
+      await fetch('http://127.0.0.1:8000/items/add-column', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ column_name: name, column_type: values.type }),
+      });
+      message.success('Column added');
+      columnForm.resetFields();
+      fetchColumns();
+      fetchData();
+    } catch {
+      message.error('Failed to add column');
+    }
+  };
+
+  const handleDeleteColumn = async (name) => {
+    if (REQUIRED_COLUMNS.includes(name)) return message.warning('Cannot delete required column');
+    try {
+      await fetch('http://127.0.0.1:8000/items/delete-column', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ column_name: name }),
+      });
+      message.success('Column deleted');
+      fetchColumns();
+      fetchData();
+    } catch {
+      message.error('Failed to delete column');
+    }
+  };
+
+  const formatTitle = (str) =>
+    str.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
   return (
-    <div style={{ padding: 24, background: '#f0f2f5', minHeight: '100vh' }}>
-      <Card 
-        title={
-          <Space>
-            <Button 
-              type="text" 
-              icon={<ArrowLeftOutlined />} 
-              onClick={() => navigate(-1)}
-              style={{ marginRight: 8 }}
-            >
-              Back
-            </Button>
-            <Title level={4} style={{ margin: 0 }}>Quotation Items</Title>
-          </Space>
-        }
-        extra={
-          <Space>
-            <Button 
-              type="primary" 
-              icon={<PlusOutlined />} 
-              onClick={addRow}
-            >
-              Add Item
-            </Button>
-            <Button 
-              type="primary" 
-              icon={<SaveOutlined />} 
-              onClick={handleSaveAndContinue}
-              loading={saving}
-              disabled={items.length <= 1}
-            >
-              Save & Continue
-            </Button>
-          </Space>
-        }
-        bodyStyle={{ padding: 0 }}
-      >
-        <div style={{ padding: 24 }}>
-          <Table 
-            columns={columns} 
-            dataSource={filteredItems} 
-            pagination={false} 
-            bordered 
-            scroll={{ x: 'max-content', y: 'calc(100vh - 300px)' }}
-            rowKey="key"
-            size="middle"
-            className="quotation-items-table"
-            style={{ marginBottom: 16 }}
-            rowClassName={(record) => record.isSearchRow ? 'search-row' : ''}
-            sticky
-          />
-          
-          <div style={{ 
-            textAlign: 'right', 
-            marginTop: 16,
-            padding: '16px',
-            background: '#fafafa',
-            border: '1px solid #f0f0f0',
-            borderRadius: '2px'
-          }}>
-            <Space size="large">
-              <Text strong>Total Items: {items.length - 1}</Text>
-              <Text strong style={{ fontSize: '18px' }}>Grand Total: ₹{grandTotal.toFixed(2)}</Text>
-            </Space>
-          </div>
+    <div style={{ padding: 32, background: '#f5f5f5', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+        <h2 style={{ margin: 0, fontSize: 28, fontWeight: 600 }}>Items Management</h2>
+        <Button type="primary" size="large" icon={<SettingOutlined />} onClick={openColumnsDrawer}>
+          Manage Columns
+        </Button>
+      </div>
+
+      {/* Table Container */}
+      <div style={{ flex: 1, background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column' }}>
+        <div
+          style={{
+            flex: 1,
+            overflow: 'auto',
+            scrollbarGutter: 'stable both-edges', // This fixes header misalignment forever
+          }}
+          className="custom-table-scroll"
+        >
+          <table style={{ width: '100%', minWidth: '1800px', borderCollapse: 'separate', borderSpacing: 0 }}>
+            <thead>
+              <tr style={{ background: '#fafafa' }}>
+                {columns.filter(c => c.column_name !== 'id').map(col => (
+                  <th
+                    key={col.column_name}
+                    style={{
+                      padding: '14px 16px',
+                      textAlign: 'left',
+                      borderBottom: '2px solid #f0f0f0',
+                      position: 'sticky',
+                      top: 0,
+                      background: '#fafafa',
+                      zIndex: 10,
+                      minWidth: 180,
+                      whiteSpace: 'nowrap',
+                      fontWeight: 600,
+                      color: '#1f1f1f',
+                    }}
+                  >
+                    {formatTitle(col.column_name)}
+                  </th>
+                ))}
+                <th
+                  style={{
+                    padding: '14px 32px 14px 16px',
+                    textAlign: 'center',
+                    borderBottom: '2px solid #f0f0f0',
+                    position: 'sticky',
+                    top: 0,
+                    right: 0,
+                    background: '#fafafa',
+                    zIndex: 11,
+                    minWidth: 100,
+                    fontWeight: 600,
+                  }}
+                >
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={columns.filter(c => c.column_name !== 'id').length + 1} style={{ textAlign: 'center', padding: 80, color: '#999' }}>
+                    Loading items...
+                  </td>
+                </tr>
+              ) : data.length === 0 ? (
+                <tr>
+                  <td colSpan={columns.filter(c => c.column_name !== 'id').length + 1} style={{ textAlign: 'center', padding: 80, color: '#999' }}>
+                    No items found
+                  </td>
+                </tr>
+              ) : (
+                data.map(record => {
+                  const isEditingRow = editingRowId === record.id;
+
+                  return (
+                    <tr
+                      key={record.id}
+                      style={{
+                        background: isEditingRow ? '#fffbe6' : 'white',
+                        borderBottom: '1px solid #f0f0f0',
+                      }}
+                    >
+                      {columns.filter(c => c.column_name !== 'id').map(col => {
+                        const name = col.column_name;
+                        const value = record[name];
+                        const isEditing = isEditingRow && editingColKey === name;
+
+                        const isMoney = ['price', 'amount', 'charge', 'total', 'rate', 'cost'].some(t => name.toLowerCase().includes(t));
+                        const isDate = name.toLowerCase().includes('date');
+                        const isLong = ['specification', 'note', 'description', 'remarks'].some(t => name.toLowerCase().includes(t));
+
+                        return (
+                          <td
+                            key={name}
+                            style={{
+                              padding: '12px 16px',
+                              verticalAlign: 'top',
+                              minWidth: 180,
+                              maxWidth: 360,
+                              borderRight: '1px solid #f8f8f8',
+                            }}
+                            onDoubleClick={() => startEdit(record, name)}
+                          >
+                            {isEditing ? (
+                              <Space.Compact style={{ width: '100%' }}>
+                                {isDate ? (
+                                  <Input type="date" value={editingValue} onChange={e => setEditingValue(e.target.value)} autoFocus onClick={e => e.stopPropagation()} />
+                                ) : isMoney ? (
+                                  <InputNumber
+                                    value={editingValue}
+                                    onChange={setEditingValue}
+                                    style={{ width: '100%' }}
+                                    precision={2}
+                                    min={0}
+                                    formatter={v => v ? `$ ${v}` : ''}
+                                    parser={v => v?.replace(/[^0-9.-]/g, '')}
+                                    autoFocus
+                                    onClick={e => e.stopPropagation()}
+                                  />
+                                ) : isLong ? (
+                                  <TextArea value={editingValue} onChange={e => setEditingValue(e.target.value)} autoFocus rows={3} onClick={e => e.stopPropagation()} />
+                                ) : (
+                                  <Input value={editingValue} onChange={e => setEditingValue(e.target.value)} autoFocus onClick={e => e.stopPropagation()} />
+                                )}
+                                <Button type="link" size="small" icon={<CheckOutlined style={{ color: 'green' }} />} onClick={e => { e.stopPropagation(); saveInlineEdit(); }} />
+                                <Button type="link" danger size="small" icon={<CloseOutlined />} onClick={e => { e.stopPropagation(); cancelEdit(); }} />
+                              </Space.Compact>
+                            ) : (
+                              <>
+                                {isDate && value ? new Date(value).toLocaleDateString('en-GB')
+                                  : isMoney && value != null ? `$ ${Number(value).toFixed(2)}`
+                                  : isLong ? <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{value || '-'}</div>
+                                  : value ?? '-'}
+                              </>
+                            )}
+                          </td>
+                        );
+                      })}
+
+                      {/* Sticky Actions */}
+                      <td
+                        style={{
+                          padding: '12px',
+                          textAlign: 'center',
+                          position: 'sticky',
+                          right: 0,
+                          background: isEditingRow ? '#fffbe6' : 'white',
+                          borderLeft: '2px solid #f0f0f0',
+                          zIndex: 9,
+                        }}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <Popconfirm title="Delete this item?" onConfirm={() => handleDelete(record.id)} okText="Yes" cancelText="No">
+                          <Button danger type="text" size="small" icon={<DeleteOutlined />} loading={deletingId === record.id} />
+                        </Popconfirm>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      </Card>
-      
-      <style jsx global>{`
-        .quotation-items-table .ant-table-thead > tr > th {
-          background: #f5f5f5;
-          font-weight: 600;
-        }
-        .quotation-items-table .search-row {
-          background: #fafafa;
-        }
-        .quotation-items-table .search-row:hover > td {
-          background: #f5f5f5 !important;
-        }
-        .ant-table-cell {
-          white-space: nowrap;
-        }
-      `}</style>
+
+        {/* Scroll hint */}
+        {data.length > 0 && (
+          <div style={{ padding: '8px 16px', color: '#888', fontSize: 13, textAlign: 'center', background: '#fafafa' }}>
+            Scroll horizontally to view more columns
+          </div>
+        )}
+      </div>
+
+      {/* Drawer */}
+      <Drawer title="Manage Columns" width={520} onClose={closeDrawer} open={drawerOpen} destroyOnClose>
+        <Form form={columnForm} onFinish={handleAddColumn} layout="vertical">
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Form.Item name="name" label="Column Name" rules={[{ required: true }]}>
+              <Input placeholder="e.g. warranty_period" />
+            </Form.Item>
+            <Form.Item name="type" label="Data Type" initialValue="string">
+              <Select>
+                {COLUMN_TYPES.map(t => <Option key={t.value} value={t.value}>{t.label}</Option>)}
+              </Select>
+            </Form.Item>
+            <Button type="primary" htmlType="submit" block>Add Column</Button>
+          </Space>
+        </Form>
+
+        <div style={{ marginTop: 32, paddingTop: 16, borderTop: '1px solid #f0f0f0' }}>
+          <Text strong>Existing Columns:</Text>
+          {columns.filter(c => c.column_name !== 'id').map(col => (
+            <div
+              key={col.column_name}
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px dashed #eee' }}
+            >
+              <div>
+                <Text strong>{col.column_name}</Text>
+                <Text type="secondary" style={{ marginLeft: 8 }}>({col.column_type})</Text>
+              </div>
+              {REQUIRED_COLUMNS.includes(col.column_name) ? (
+                <Text type="secondary" italic>Required</Text>
+              ) : (
+                <Popconfirm
+                  title="Delete this column and all data?"
+                  onConfirm={() => handleDeleteColumn(col.column_name)}
+                  okText="Delete"
+                  okButtonProps={{ danger: true }}
+                >
+                  <Button danger size="small">Delete</Button>
+                </Popconfirm>
+              )}
+            </div>
+          ))}
+        </div>
+      </Drawer>
     </div>
   );
 };
