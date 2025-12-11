@@ -1,5 +1,3 @@
-// src/pages/Quotation.jsx
-
 import React, { useState, useEffect } from 'react';
 import {
   Table,
