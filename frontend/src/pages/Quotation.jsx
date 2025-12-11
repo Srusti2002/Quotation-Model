@@ -330,152 +330,106 @@ const Quotation = () => {
         open={viewModalOpen}
         onCancel={handleCloseViewModal}
         footer={null}
-        width={850}
+        width={900}
         centered
-        bodyStyle={{ padding: 0, maxHeight: '90vh', overflow: 'auto' }}
+        bodyStyle={{ padding: 0, maxHeight: '90vh', overflow: 'auto', background: '#eef2f7' }}
       >
         {selectedQuotationData && (
-          <div
-            style={{
-              width: '210mm',
-              minHeight: '297mm',
-              maxWidth: '100%',
-              margin: '0 auto',
-              padding: '20mm',
-              background: '#fff',
-              boxSizing: 'border-box',
-              fontSize: '11pt',
-            }}
-          >
-            {/* Header */}
-            <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-              <Title level={3} style={{ margin: 0, marginBottom: '8px' }}>
-                QUOTATION
-              </Title>
-              <Text type="secondary">Quotation ID: {selectedQuotationData.quotation.id}</Text>
-            </div>
-
-            <Divider style={{ margin: '20px 0' }} />
-
-            {/* Quotation and Customer Details Table - Dynamic */}
-            <div style={{ marginBottom: '30px' }}>
-              <Title level={5} style={{ marginBottom: '12px' }}>
-                Quotation & Customer Details
-              </Title>
-              <table
-                style={{
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                  border: '1px solid #d9d9d9',
-                }}
-              >
-                <tbody>
-                  {quotationColumns.map((col) => (
-                    <tr key={col.column_name}>
-                      <td style={{ padding: '8px', border: '1px solid #d9d9d9', fontWeight: 600, width: '30%', background: '#fafafa' }}>
-                        {formatLabel(col.column_name)}
-                      </td>
-                      <td style={{ padding: '8px', border: '1px solid #d9d9d9' }}>
-                        {selectedQuotationData.quotation[col.column_name] || '-'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Items Details Table - Dynamic */}
-            <div style={{ marginBottom: '30px' }}>
-              <Title level={5} style={{ marginBottom: '12px' }}>
-                Items Details
-              </Title>
-              <div style={{ overflowX: 'auto' }}>
-                <table
-                  style={{
-                    width: '100%',
-                    borderCollapse: 'collapse',
-                    border: '1px solid #d9d9d9',
-                    fontSize: '10pt',
-                  }}
-                >
-                  <thead>
-                    <tr style={{ background: '#fafafa' }}>
-                      <th style={{ padding: '10px', border: '1px solid #d9d9d9', fontWeight: 600, textAlign: 'left' }}>
-                        Sl.No
-                      </th>
-                      {itemsColumns.map((col) => (
-                        <th key={col.column_name} style={{ padding: '10px', border: '1px solid #d9d9d9', fontWeight: 600, textAlign: 'left' }}>
-                          {formatLabel(col.column_name)}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedQuotationData.items.map((item, index) => (
-                      <tr key={item.id}>
-                        <td style={{ padding: '10px', border: '1px solid #d9d9d9' }}>
-                          {index + 1}
-                        </td>
-                        {itemsColumns.map((col) => {
-                          const value = item[col.column_name];
-                          let displayValue = value || '-';
-                          
-                          // Format numbers with currency for rate/cost fields
-                          if ((col.column_name.includes('rate') || col.column_name.includes('cost')) && value) {
-                            displayValue = `₹ ${Number(value).toFixed(2)}`;
-                          }
-                          
-                          return (
-                            <td key={col.column_name} style={{ 
-                              padding: '10px', 
-                              border: '1px solid #d9d9d9',
-                              textAlign: (col.column_name.includes('rate') || col.column_name.includes('cost')) ? 'right' : 'left'
-                            }}>
-                              {displayValue}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Total Cost - Lower Right */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '40px' }}>
-              <div
-                style={{
-                  border: '2px solid #1890ff',
-                  padding: '15px 25px',
-                  borderRadius: '8px',
-                  background: '#e6f7ff',
-                  minWidth: '250px',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text strong style={{ fontSize: '14pt', marginRight: '30px' }}>
-                    Total Cost:
-                  </Text>
-                  <Text strong style={{ fontSize: '16pt', color: '#1890ff' }}>
-                    ₹ {calculateTotal(selectedQuotationData.items).toFixed(2)}
-                  </Text>
+          <div className="a4-wrapper">
+            <div className="a4-page">
+              {/* Header */}
+              <div className="a4-head">
+                <Title level={3} style={{ margin: 0, marginBottom: 8 }}>
+                  QUOTATION
+                </Title>
+                <div className="subtitle">
+                  Quotation ID: {selectedQuotationData.quotation.id}
                 </div>
               </div>
-            </div>
 
-            {/* Footer */}
-            <div style={{ marginTop: '50px', textAlign: 'center' }}>
-              <Divider />
-              <Text type="secondary" style={{ fontSize: '9pt' }}>
+              <Divider style={{ margin: '12px 0 18px' }} />
+
+              {/* Quotation and Customer Details - compact grid */}
+              <div className="a4-section">
+                <div className="a4-section-title">
+                  <Title level={5} style={{ margin: 0 }}>
+                    Quotation & Customer Details
+                  </Title>
+                  <small>Auto-fits into A4 width</small>
+                </div>
+                <div className="details-grid">
+                  {quotationColumns.map((col) => (
+                    <div key={col.column_name} className="detail-card">
+                      <div className="detail-label">{formatLabel(col.column_name)}</div>
+                      <div className="detail-value">
+                        {selectedQuotationData.quotation[col.column_name] || '-'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Items Details Table */}
+              <div className="a4-section">
+                <div className="a4-section-title">
+                  <Title level={5} style={{ margin: 0 }}>
+                    Items Details
+                  </Title>
+                  <small>Columns wrap to stay inside A4 view</small>
+                </div>
+                <div className="items-table">
+                  <div className="table-scroll">
+                    <table className="a4-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: 70 }}>Sl.No</th>
+                          {itemsColumns.map((col) => (
+                            <th key={col.column_name}>{formatLabel(col.column_name)}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedQuotationData.items.map((item, index) => (
+                          <tr key={item.id}>
+                            <td>{index + 1}</td>
+                            {itemsColumns.map((col) => {
+                              const value = item[col.column_name];
+                              const isMoney = col.column_name.includes('rate') || col.column_name.includes('cost');
+                              const displayValue =
+                                isMoney && value
+                                  ? `₹ ${Number(value).toFixed(2)}`
+                                  : value || '-';
+
+                              return (
+                                <td
+                                  key={col.column_name}
+                                  style={{ textAlign: isMoney ? 'right' : 'left' }}
+                                >
+                                  {displayValue}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Total Cost - Lower Right */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24, position: 'relative', zIndex: 2 }}>
+                <div className="totals-box">
+                  <span className="label">Total Cost:</span>
+                  <span className="value">₹ {calculateTotal(selectedQuotationData.items).toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="footer-note">
+                <Divider style={{ margin: '20px 0 12px' }} />
                 This is a system-generated quotation
-              </Text>
+              </div>
             </div>
           </div>
         )}

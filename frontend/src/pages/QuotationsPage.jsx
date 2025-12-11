@@ -39,13 +39,13 @@ const REQUIRED_COLUMNS = ['id', 'customer_name', 'enquiry_ref', 'mobile_number']
 
 const QuotationsPage = () => {
   const [data, setData] = useState([]);
-  const [columns, setColumns] = useState([]); // Array of objects: { column_name, column_type }
+  const [columns, setColumns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingRowId, setEditingRowId] = useState(null);
-  const [editingColKey, setEditingColKey] = useState(null); // This will be column_name string
+  const [editingColKey, setEditingColKey] = useState(null);
   const [editingValue, setEditingValue] = useState('');
 
   const [form] = Form.useForm();
@@ -207,7 +207,8 @@ const QuotationsPage = () => {
           .join(' '),
         dataIndex: columnName,
         key: columnName,
-        width: 280,
+        width: 200,
+        ellipsis: true,
         render: (text, record) => {
           const isEditing = editingRowId === record.id && editingColKey === columnName;
           const isMoney = ['price', 'amount', 'charge', 'total', 'rate'].some(term =>
@@ -273,7 +274,7 @@ const QuotationsPage = () => {
           }
           if (isLongText && text) {
             return (
-              <div style={{ whiteSpace: 'pre-wrap', maxWidth: 320, wordBreak: 'break-word' }}>
+              <div style={{ whiteSpace: 'pre-wrap', maxWidth: 180, wordBreak: 'break-word' }}>
                 {text}
               </div>
             );
@@ -314,7 +315,13 @@ const QuotationsPage = () => {
   });
 
   return (
-    <div style={{ padding: 32, background: '#f5f5f5', minHeight: '100vh' }}>
+    <div style={{ 
+      padding: 24, 
+      background: '#f5f5f5', 
+      minHeight: '100vh',
+      position: 'relative',
+      overflow: 'auto'
+    }}>
       <div
         style={{
           marginBottom: 24,
@@ -337,6 +344,7 @@ const QuotationsPage = () => {
           borderRadius: 12,
           overflow: 'hidden',
           boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+          position: 'relative',
         }}
       >
         <Table
@@ -344,9 +352,20 @@ const QuotationsPage = () => {
           dataSource={data}
           rowKey="id"
           loading={loading}
-          scroll={{ x: 1300 }}
-          pagination={{ pageSize: 10 }}
+          scroll={{ 
+            x: 'max-content',
+            y: 600,
+            scrollToFirstRowOnChange: true,
+          }}
+          pagination={{ 
+            pageSize: 10,
+            showSizeChanger: true,
+            showTotal: (total) => `Total ${total} items`,
+          }}
           bordered
+          sticky
+          size="middle"
+          className="custom-table-scroll"
         />
       </div>
 
@@ -422,6 +441,60 @@ const QuotationsPage = () => {
             ))}
         </div>
       </Drawer>
+
+      <style>{`
+        /* Perfect header alignment fix */
+        .custom-table-scroll .ant-table-body {
+          scrollbar-gutter: stable;
+        }
+
+        /* Custom scrollbar styling */
+        .custom-table-scroll .ant-table-body::-webkit-scrollbar {
+          width: 10px;
+          height: 10px;
+        }
+        
+        .custom-table-scroll .ant-table-body::-webkit-scrollbar-thumb {
+          background: rgba(0, 0, 0, 0.3);
+          border-radius: 5px;
+        }
+        
+        .custom-table-scroll .ant-table-body::-webkit-scrollbar-thumb:hover {
+          background: rgba(0, 0, 0, 0.5);
+        }
+        
+        .custom-table-scroll .ant-table-body::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.05);
+          border-radius: 5px;
+        }
+
+        /* Prevent table from overlapping sidebar */
+        .ant-table-wrapper {
+          position: relative;
+          z-index: 1;
+        }
+
+        /* Sticky header styling */
+        .custom-table-scroll .ant-table-thead > tr > th {
+          position: sticky;
+          top: 0;
+          z-index: 3;
+          background: #fafafa;
+        }
+
+        /* Fixed column styling */
+        .custom-table-scroll .ant-table-cell-fix-right {
+          position: sticky !important;
+          right: 0;
+          z-index: 2;
+          background: #fff;
+        }
+
+        .custom-table-scroll .ant-table-thead .ant-table-cell-fix-right {
+          z-index: 4;
+          background: #fafafa;
+        }
+      `}</style>
     </div>
   );
 };

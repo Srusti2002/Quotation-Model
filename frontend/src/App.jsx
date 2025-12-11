@@ -53,6 +53,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
         transition: "width 0.3s ease",
         display: "flex",
         flexDirection: "column",
+        zIndex: 1000,
       }}
     >
       {/* Header */}
@@ -116,15 +117,17 @@ const Sidebar = ({ collapsed, onToggle }) => {
 // -----------------------
 const Layout = ({ collapsed, onToggle, children }) => {
   return (
-    <div style={{ display: "flex" }}>
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
       <Sidebar collapsed={collapsed} onToggle={onToggle} />
       <div
         style={{
           marginLeft: collapsed ? "80px" : "250px",
           flex: 1,
           backgroundColor: "#f5f5f5",
-          minHeight: "100vh",
+          height: "100vh",
+          overflow: "hidden",
           transition: "margin-left 0.3s ease",
+          position: "relative",
         }}
       >
         {children}

@@ -9,11 +9,23 @@ const AppLayout = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ minHeight: '100vh', overflow: 'hidden' }}>
       <Sidebar collapsed={collapsed} />
-      <Layout>
+      <Layout style={{ 
+        marginLeft: 0,
+        height: '100vh',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
         <Topbar collapsed={collapsed} setCollapsed={setCollapsed} />
-        <Content style={{ margin: '24px', padding: '24px', background: '#fff' }}>
+        <Content style={{ 
+          padding: 0,
+          background: '#f5f5f5',
+          overflow: 'auto',
+          flex: 1,
+          position: 'relative'
+        }}>
           {children}
         </Content>
       </Layout>

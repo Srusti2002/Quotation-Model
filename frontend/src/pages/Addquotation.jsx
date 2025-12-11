@@ -238,40 +238,39 @@ const AddQuotation = () => {
     container: {
       minHeight: '100vh',
       backgroundColor: '#f9fafb',
-      padding: '32px 16px'
+      padding: '32px 16px',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'flex-start'
     },
     loadingContainer: {
       minHeight: '100vh',
       backgroundColor: '#f9fafb',
       display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center'
-    },
-    loadingContent: {
-      textAlign: 'center'
-    },
-    spinner: {
-      display: 'inline-block',
-      width: '48px',
-      height: '48px',
-      border: '3px solid #e5e7eb',
-      borderTop: '3px solid #2563eb',
-      borderRadius: '50%',
-      animation: 'spin 1s linear infinite'
+      justifyContent: 'center',
+      alignItems: 'center'
     },
     loadingText: {
       marginTop: '16px',
       color: '#4b5563'
     },
     wrapper: {
-      maxWidth: '1280px',
-      margin: '0 auto'
+      width: '210mm', /* A4 width */
+      minHeight: '297mm', /* A4 height */
+      margin: '0 auto',
+      backgroundColor: 'white',
+      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+      padding: '20mm', /* Standard A4 margins */
+      boxSizing: 'border-box',
+      overflow: 'hidden',
+      position: 'relative'
     },
     card: {
       backgroundColor: 'white',
       borderRadius: '8px',
-      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-      padding: '24px'
+      padding: '0',
+      width: '100%',
+      boxSizing: 'border-box'
     },
     title: {
       fontSize: '30px',
@@ -296,53 +295,68 @@ const AddQuotation = () => {
       borderColor: '#fecaca'
     },
     section: {
-      marginBottom: '32px'
+      marginBottom: '24px',
+      breakInside: 'avoid',
+      pageBreakInside: 'avoid'
     },
     sectionHeader: {
-      fontSize: '20px',
+      fontSize: '16px',
       fontWeight: '600',
-      color: '#374151',
-      marginBottom: '16px',
-      paddingBottom: '8px',
-      borderBottom: '2px solid #3b82f6'
+      color: '#1f2937',
+      marginBottom: '12px',
+      paddingBottom: '6px',
+      borderBottom: '1px solid #e5e7eb'
     },
     sectionHeaderFlex: {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: '16px',
-      paddingBottom: '8px',
-      borderBottom: '2px solid #3b82f6'
+      marginBottom: '12px',
+      paddingBottom: '6px',
+      borderBottom: '1px solid #e5e7eb',
+      flexWrap: 'wrap',
+      gap: '8px'
     },
     grid: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-      gap: '16px'
+      gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+      gap: '12px',
+      marginBottom: '16px',
+      width: '100%',
+      overflow: 'hidden'
     },
     fieldContainer: {
       display: 'flex',
       flexDirection: 'column'
     },
     label: {
-      fontSize: '14px',
+      fontSize: '12px',
       fontWeight: '500',
-      color: '#374151',
-      marginBottom: '4px'
+      color: '#4b5563',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis'
     },
     input: {
-      padding: '8px 12px',
+      padding: '6px 10px',
       border: '1px solid #d1d5db',
-      borderRadius: '6px',
-      fontSize: '14px',
-      outline: 'none',
-      transition: 'all 0.2s'
+      borderRadius: '4px',
+      fontSize: '13px',
+      transition: 'border-color 0.2s, box-shadow 0.2s',
+      width: '100%',
+      boxSizing: 'border-box',
+      maxWidth: '100%',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis'
     },
     itemCard: {
-      marginBottom: '24px',
-      padding: '16px',
       backgroundColor: '#f9fafb',
-      borderRadius: '8px',
-      border: '1px solid #e5e7eb'
+      borderRadius: '6px',
+      padding: '12px',
+      marginBottom: '12px',
+      border: '1px solid #e5e7eb',
+      breakInside: 'avoid',
+      pageBreakInside: 'avoid'
     },
     itemHeader: {
       display: 'flex',
