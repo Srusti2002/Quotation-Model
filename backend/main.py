@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import create_engine, MetaData, Table, Column, String, Integer, text
 from sqlalchemy.exc import SQLAlchemyError
-
+from typing import Dict, List, Optional
+import json
 # --------------------------
 # FastAPI App
 # --------------------------
@@ -21,6 +22,7 @@ app.add_middleware(
 # Database Setup
 # --------------------------
 DATABASE_URL = "postgresql://postgres:Srusti%40123@localhost:5432/Quotation"
+
 engine = create_engine(DATABASE_URL)
 metadata = MetaData()
 
@@ -1102,4 +1104,80 @@ def delete_quotation_with_items(quotation_id: int):
     except HTTPException:
         raise
     except SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+from sqlalchemy import create_engine, MetaData, Table, Column, String, Integer, text
+from sqlalchemy.dialects.postgresql import JSON  # Add this import
+
+# Add user preferences table and models
+# Add user preferences table and models
+class ColumnOrderRequest(BaseModel):
+    column_order: List[str]
+
+user_preferences_table = Table(
+    "user_preferences",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user_id", String, default="default"),
+    Column("preference_type", String),
+    Column("preference_data", String)  # Store JSON as string
+)
+
+# Create the table
+metadata.create_all(engine)
+
+@app.post("/user-preferences/column-order")
+def save_column_order(req: ColumnOrderRequest):
+    try:
+        # Check if preference exists
+        check_sql = text("""
+            SELECT id FROM user_preferences 
+            WHERE user_id = :user_id AND preference_type = 'column_order'
+        """)
+        
+        with engine.begin() as conn:
+            existing = conn.execute(check_sql, {"user_id": "default"}).fetchone()
+            
+            if existing:
+                # Update existing
+                update_sql = text("""
+                    UPDATE user_preferences 
+                    SET preference_data = :data
+                    WHERE id = :id
+                """)
+                conn.execute(update_sql, {"data": json.dumps(req.column_order), "id": existing[0]})
+            else:
+                # Insert new
+                insert_sql = text("""
+                    INSERT INTO user_preferences (user_id, preference_type, preference_data)
+                    VALUES (:user_id, :pref_type, :data)
+                """)
+                conn.execute(insert_sql, {
+                    "user_id": "default", 
+                    "pref_type": "column_order", 
+                    "data": json.dumps(req.column_order)
+                })
+                
+        return {"status": "success", "saved": req.column_order}
+        
+    except Exception as e:
+        print(f"Error in save_column_order: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+@app.get("/user-preferences/column-order")
+def get_column_order():
+    try:
+        sql = text("""
+            SELECT preference_data FROM user_preferences 
+            WHERE user_id = :user_id AND preference_type = 'column_order'
+        """)
+        
+        with engine.connect() as conn:
+            result = conn.execute(sql, {"user_id": "default"}).fetchone()
+            
+            if result and result[0]:
+                return {"column_order": json.loads(result[0])}
+            else:
+                return {"column_order": []}
+                
+    except Exception as e:
+        print(f"Error in get_column_order: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

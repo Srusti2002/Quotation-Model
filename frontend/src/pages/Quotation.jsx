@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   Table,
@@ -12,8 +13,34 @@ import {
   Popconfirm,
 } from 'antd';
 import { EyeOutlined, EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const { Title, Text } = Typography;
+
+// Sortable card component
+const SortableCard = ({ id, children }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    cursor: 'grab',
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      {children}
+    </div>
+  );
+};
 
 const Quotation = () => {
   const [data, setData] = useState([]);
@@ -32,16 +59,47 @@ const Quotation = () => {
 
   const API_BASE = 'http://127.0.0.1:8000';
 
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Save column order to backend
+  const saveColumnOrderToServer = async (columnOrder) => {
+    try {
+      const response = await fetch(`${API_BASE}/user-preferences/column-order`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ column_order: columnOrder }),
+      });
+      
+      if (response.ok) {
+        message.success('Column order saved permanently');
+      } else {
+        message.error('Failed to save column order');
+      }
+    } catch (error) {
+      console.error('Failed to save column order:', error);
+      message.error('Failed to save column order');
+    }
+  };
+
   // Fetch columns dynamically
   const fetchColumns = async () => {
     try {
-      const [quotationRes, itemsRes] = await Promise.all([
+      const [quotationRes, itemsRes, serverOrderRes] = await Promise.all([
         fetch(`${API_BASE}/quotation/columns`),
-        fetch(`${API_BASE}/items/columns`)
+        fetch(`${API_BASE}/items/columns`),
+        fetch(`${API_BASE}/user-preferences/column-order`)
       ]);
 
       const quotationData = await quotationRes.json();
       const itemsData = await itemsRes.json();
+      const serverOrderData = await serverOrderRes.json();
 
       const filteredQuotationCols = quotationData.columns.filter(
         col => col.column_name !== 'id'
@@ -50,8 +108,23 @@ const Quotation = () => {
         col => col.column_name !== 'id' && col.column_name !== 'quotation_id'
       );
 
-      setQuotationColumns(filteredQuotationCols);
       setItemsColumns(filteredItemsCols);
+
+      // Apply server order or default order
+      let orderedColumns = filteredQuotationCols;
+      if (serverOrderData.column_order && serverOrderData.column_order.length > 0) {
+        orderedColumns = serverOrderData.column_order.map(colName => 
+          filteredQuotationCols.find(col => col.column_name === colName)
+        ).filter(Boolean);
+        
+        // Add any missing columns to the end
+        const missingColumns = filteredQuotationCols.filter(col => 
+          !serverOrderData.column_order.includes(col.column_name)
+        );
+        orderedColumns = [...orderedColumns, ...missingColumns];
+      }
+
+      setQuotationColumns(orderedColumns);
     } catch (error) {
       console.error('Error fetching columns:', error);
       message.error('Failed to load column structure');
@@ -87,6 +160,22 @@ const Quotation = () => {
       .split('_')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
+  };
+
+  // Handle drag end
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    
+    if (active.id !== over.id) {
+      const oldIndex = quotationColumns.findIndex(col => col.column_name === active.id);
+      const newIndex = quotationColumns.findIndex(col => col.column_name === over.id);
+      
+      const newOrder = arrayMove(quotationColumns, oldIndex, newIndex);
+      setQuotationColumns(newOrder);
+      
+      const columnNames = newOrder.map(col => col.column_name);
+      saveColumnOrderToServer(columnNames);
+    }
   };
 
   // Open view modal
@@ -332,7 +421,7 @@ const Quotation = () => {
         footer={null}
         width={900}
         centered
-        bodyStyle={{ padding: 0, maxHeight: '90vh', overflow: 'auto', background: '#eef2f7' }}
+        styles={{ body: { padding: 0, maxHeight: '90vh', overflow: 'auto', background: '#eef2f7' } }}
       >
         {selectedQuotationData && (
           <div className="a4-wrapper">
@@ -349,24 +438,34 @@ const Quotation = () => {
 
               <Divider style={{ margin: '12px 0 18px' }} />
 
-              {/* Quotation and Customer Details - compact grid */}
+              {/* Quotation and Customer Details - compact grid with drag & drop */}
               <div className="a4-section">
                 <div className="a4-section-title">
                   <Title level={5} style={{ margin: 0 }}>
                     Quotation & Customer Details
                   </Title>
-                  <small>Auto-fits into A4 width</small>
+                  <small>Drag cards to reorder (order saved permanently)</small>
                 </div>
-                <div className="details-grid">
-                  {quotationColumns.map((col) => (
-                    <div key={col.column_name} className="detail-card">
-                      <div className="detail-label">{formatLabel(col.column_name)}</div>
-                      <div className="detail-value">
-                        {selectedQuotationData.quotation[col.column_name] || '-'}
-                      </div>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext items={quotationColumns.map(col => col.column_name)}>
+                    <div className="details-grid">
+                      {quotationColumns.map((col) => (
+                        <SortableCard key={col.column_name} id={col.column_name}>
+                          <div className="detail-card">
+                            <div className="detail-label">{formatLabel(col.column_name)}</div>
+                            <div className="detail-value">
+                              {selectedQuotationData.quotation[col.column_name] || '-'}
+                            </div>
+                          </div>
+                        </SortableCard>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </SortableContext>
+                </DndContext>
               </div>
 
               {/* Items Details Table */}
@@ -455,7 +554,7 @@ const Quotation = () => {
             Save Changes
           </Button>,
         ]}
-        bodyStyle={{ maxHeight: '80vh', overflow: 'auto' }}
+        styles={{ body: { maxHeight: '80vh', overflow: 'auto' } }}
       >
         <Form form={editForm} layout="vertical">
           <Divider orientation="left">Quotation Details</Divider>
@@ -571,5 +670,3 @@ const Quotation = () => {
 };
 
 export default Quotation;
-
-
