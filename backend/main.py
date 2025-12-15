@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import create_engine, MetaData, Table, Column, String, Integer, text
 from sqlalchemy.exc import SQLAlchemyError
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import json
 # --------------------------
 # FastAPI App
@@ -1180,4 +1180,137 @@ def get_column_order():
                 
     except Exception as e:
         print(f"Error in get_column_order: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+# Add this model for quotation layouts
+class QuotationLayoutRequest(BaseModel):
+    layout: List[Dict[str, Any]]
+
+# Add quotation_layouts table
+quotation_layouts_table = Table(
+    "quotation_layouts",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("quotation_id", Integer),
+    Column("user_id", String, default="default"),
+    Column("layout_data", String)  # Store JSON as string
+)
+
+# Create the table
+metadata.create_all(engine)
+
+# ============================================================
+#         QUOTATION LAYOUT ENDPOINTS
+# ============================================================
+
+@app.post("/user-preferences/quotation-layout/{quotation_id}")
+def save_quotation_layout(quotation_id: int, req: QuotationLayoutRequest):
+    """
+    Save a custom layout for a specific quotation
+    """
+    try:
+        # Check if layout exists for this quotation
+        check_sql = text("""
+            SELECT id FROM quotation_layouts 
+            WHERE quotation_id = :qid AND user_id = :uid
+        """)
+        
+        with engine.begin() as conn:
+            existing = conn.execute(check_sql, {
+                "qid": quotation_id,
+                "uid": "default"
+            }).fetchone()
+            
+            if existing:
+                # Update existing layout
+                update_sql = text("""
+                    UPDATE quotation_layouts 
+                    SET layout_data = :data
+                    WHERE id = :id
+                """)
+                conn.execute(update_sql, {
+                    "data": json.dumps(req.layout),
+                    "id": existing[0]
+                })
+            else:
+                # Insert new layout
+                insert_sql = text("""
+                    INSERT INTO quotation_layouts (quotation_id, user_id, layout_data)
+                    VALUES (:qid, :uid, :data)
+                """)
+                conn.execute(insert_sql, {
+                    "qid": quotation_id,
+                    "uid": "default",
+                    "data": json.dumps(req.layout)
+                })
+        
+        return {
+            "status": "success",
+            "message": "Layout saved successfully",
+            "quotation_id": quotation_id
+        }
+        
+    except Exception as e:
+        print(f"Error in save_quotation_layout: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/user-preferences/quotation-layout/{quotation_id}")
+def get_quotation_layout(quotation_id: int):
+    """
+    Get the saved layout for a specific quotation
+    """
+    try:
+        sql = text("""
+            SELECT layout_data FROM quotation_layouts 
+            WHERE quotation_id = :qid AND user_id = :uid
+        """)
+        
+        with engine.connect() as conn:
+            result = conn.execute(sql, {
+                "qid": quotation_id,
+                "uid": "default"
+            }).fetchone()
+            
+            if result and result[0]:
+                return {
+                    "quotation_id": quotation_id,
+                    "layout": json.loads(result[0])
+                }
+            else:
+                return {
+                    "quotation_id": quotation_id,
+                    "layout": []
+                }
+                
+    except Exception as e:
+        print(f"Error in get_quotation_layout: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/user-preferences/quotation-layout/{quotation_id}")
+def delete_quotation_layout(quotation_id: int):
+    """
+    Delete a saved layout for a specific quotation
+    """
+    try:
+        delete_sql = text("""
+            DELETE FROM quotation_layouts 
+            WHERE quotation_id = :qid AND user_id = :uid
+        """)
+        
+        with engine.begin() as conn:
+            result = conn.execute(delete_sql, {
+                "qid": quotation_id,
+                "uid": "default"
+            })
+            
+        return {
+            "status": "success",
+            "message": "Layout deleted successfully"
+        }
+        
+    except Exception as e:
+        print(f"Error in delete_quotation_layout: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

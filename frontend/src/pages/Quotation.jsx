@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Table,
@@ -12,10 +11,17 @@ import {
   Space,
   Popconfirm,
 } from 'antd';
-import { EyeOutlined, EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { 
+  EyeOutlined, 
+  EditOutlined, 
+  DeleteOutlined, 
+  PlusOutlined,
+  LayoutOutlined
+} from '@ant-design/icons';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import QuotationDesigner from './QuotationDesigner';
 
 const { Title, Text } = Typography;
 
@@ -56,6 +62,10 @@ const Quotation = () => {
   // Dynamic columns state
   const [quotationColumns, setQuotationColumns] = useState([]);
   const [itemsColumns, setItemsColumns] = useState([]);
+
+  // Designer mode state
+  const [designerMode, setDesignerMode] = useState(false);
+  const [designerData, setDesignerData] = useState(null);
 
   const API_BASE = 'http://127.0.0.1:8000';
 
@@ -189,6 +199,17 @@ const Quotation = () => {
     setSelectedQuotationData(null);
   };
 
+  // Open designer
+  const handleDesign = (record) => {
+    setDesignerData(record);
+    setDesignerMode(true);
+  };
+
+  const handleCloseDesigner = () => {
+    setDesignerMode(false);
+    setDesignerData(null);
+  };
+
   // Open edit modal
   const handleEdit = (record) => {
     setSelectedQuotationData(record);
@@ -320,6 +341,16 @@ const Quotation = () => {
     }, 0);
   };
 
+  // If in designer mode, show designer
+  if (designerMode) {
+    return (
+      <QuotationDesigner
+        quotationData={designerData}
+        onBack={handleCloseDesigner}
+      />
+    );
+  }
+
   // Table columns
   const columns = [
     {
@@ -343,7 +374,7 @@ const Quotation = () => {
     {
       title: 'Action',
       key: 'action',
-      width: 150,
+      width: 220,
       render: (_, record) => (
         <Space>
           <Button
@@ -353,6 +384,19 @@ const Quotation = () => {
             size="small"
           >
             View
+          </Button>
+          <Button
+            type="default"
+            icon={<LayoutOutlined />}
+            onClick={() => handleDesign(record)}
+            size="small"
+            style={{ 
+              background: '#52c41a', 
+              borderColor: '#52c41a',
+              color: 'white'
+            }}
+          >
+            Design
           </Button>
           <Button
             type="default"
