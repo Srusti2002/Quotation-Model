@@ -205,6 +205,17 @@ const Quotation = () => {
     setDesignerMode(true);
   };
 
+  // Open designer from header button
+  const handleDesignFromHeader = () => {
+    if (data.length === 0) {
+      message.warning('No quotations available to design');
+      return;
+    }
+    // Use the first quotation or you can add logic to select one
+    setDesignerData(data[0]);
+    setDesignerMode(true);
+  };
+
   const handleCloseDesigner = () => {
     setDesignerMode(false);
     setDesignerData(null);
@@ -374,7 +385,7 @@ const Quotation = () => {
     {
       title: 'Action',
       key: 'action',
-      width: 220,
+      width: 180,
       render: (_, record) => (
         <Space>
           <Button
@@ -384,19 +395,6 @@ const Quotation = () => {
             size="small"
           >
             View
-          </Button>
-          <Button
-            type="default"
-            icon={<LayoutOutlined />}
-            onClick={() => handleDesign(record)}
-            size="small"
-            style={{ 
-              background: '#52c41a', 
-              borderColor: '#52c41a',
-              color: 'white'
-            }}
-          >
-            Design
           </Button>
           <Button
             type="default"
@@ -432,6 +430,22 @@ const Quotation = () => {
         <h2 style={{ margin: 0, fontSize: 28, fontWeight: 600 }}>
           Quotations
         </h2>
+        <Button
+          type="primary"
+          size="large"
+          icon={<LayoutOutlined />}
+          onClick={handleDesignFromHeader}
+          style={{
+            background: '#52c41a',
+            borderColor: '#52c41a',
+            height: '48px',
+            fontSize: '16px',
+            fontWeight: 600,
+            boxShadow: '0 4px 12px rgba(82, 196, 26, 0.3)',
+          }}
+        >
+          Design Quotation
+        </Button>
       </div>
 
       <div

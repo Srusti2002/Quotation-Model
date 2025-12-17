@@ -35,8 +35,173 @@ import './QuotationDesigner.css';
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 
+// Resizable Image Component
+const ResizableImage = ({ item, onResize, onDragMove, isSelected, onClick }) => {
+  const [isResizing, setIsResizing] = useState(false);
+  const [isDraggingImg, setIsDraggingImg] = useState(false);
+  const [startPos, setStartPos] = useState({ x: 0, y: 0 });
+  const [startSize, setStartSize] = useState({ width: 0, height: 0 });
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const imageRef = useRef(null);
+
+  const handleResizeStart = (e, corner) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setIsResizing(true);
+    setStartPos({ x: e.clientX, y: e.clientY });
+    setStartSize({ 
+      width: item.width || 200, 
+      height: item.height || 100 
+    });
+  };
+
+  const handleImageDragStart = (e) => {
+    if (isResizing) return;
+    e.stopPropagation();
+    setIsDraggingImg(true);
+    setDragStart({ 
+      x: e.clientX - (item.imageX || 0), 
+      y: e.clientY - (item.imageY || 0) 
+    });
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (isResizing) {
+        const deltaX = e.clientX - startPos.x;
+        const deltaY = e.clientY - startPos.y;
+        
+        const newWidth = Math.max(50, Math.min(700, startSize.width + deltaX));
+        const newHeight = Math.max(50, Math.min(500, startSize.height + deltaY));
+        
+        onResize(newWidth, newHeight);
+      } else if (isDraggingImg) {
+        const newX = e.clientX - dragStart.x;
+        const newY = e.clientY - dragStart.y;
+        onDragMove(newX, newY);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      setIsDraggingImg(false);
+    };
+
+    if (isResizing || isDraggingImg) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, isDraggingImg, startPos, startSize, dragStart, onResize, onDragMove]);
+
+  if (!item.value) {
+    return (
+      <div
+        style={{
+          width: `${item.width}px`,
+          height: `${item.height || 100}px`,
+          border: '2px dashed #d9d9d9',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#999',
+          borderRadius: '4px',
+          margin: '0 auto',
+        }}
+      >
+        <PictureOutlined style={{ fontSize: '32px' }} />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        display: 'inline-block',
+        cursor: isDraggingImg ? 'grabbing' : 'grab',
+      }}
+      onClick={onClick}
+    >
+      <img
+        ref={imageRef}
+        src={item.value}
+        alt="Uploaded"
+        style={{
+          width: `${item.width}px`,
+          height: `${item.height}px`,
+          objectFit: item.objectFit || 'contain',
+          display: 'block',
+          userSelect: 'none',
+          pointerEvents: isResizing ? 'none' : 'auto',
+        }}
+        onMouseDown={handleImageDragStart}
+        draggable={false}
+      />
+      
+      {isSelected && (
+        <>
+          {/* Resize Handle - Bottom Right */}
+          <div
+            onMouseDown={(e) => handleResizeStart(e, 'br')}
+            style={{
+              position: 'absolute',
+              bottom: '-5px',
+              right: '-5px',
+              width: '12px',
+              height: '12px',
+              backgroundColor: '#1890ff',
+              border: '2px solid white',
+              borderRadius: '50%',
+              cursor: 'nwse-resize',
+              zIndex: 10,
+              boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            }}
+          />
+          
+          {/* Resize Handle - Bottom Left */}
+          <div
+            onMouseDown={(e) => handleResizeStart(e, 'bl')}
+            style={{
+              position: 'absolute',
+              bottom: '-5px',
+              left: '-5px',
+              width: '12px',
+              height: '12px',
+              backgroundColor: '#1890ff',
+              border: '2px solid white',
+              borderRadius: '50%',
+              cursor: 'nesw-resize',
+              zIndex: 10,
+              boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            }}
+          />
+          
+          {/* Visual Border when selected */}
+          <div
+            style={{
+              position: 'absolute',
+              top: '-2px',
+              left: '-2px',
+              right: '-2px',
+              bottom: '-2px',
+              border: '2px solid #1890ff',
+              borderRadius: '4px',
+              pointerEvents: 'none',
+            }}
+          />
+        </>
+      )}
+    </div>
+  );
+};
+
 // Sortable Item Component
-const SortableItem = ({ id, children, isSelected, onClick }) => {
+const SortableItem = ({ id, children, isSelected, onClick, isImage }) => {
   const {
     attributes,
     listeners,
@@ -44,7 +209,10 @@ const SortableItem = ({ id, children, isSelected, onClick }) => {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id });
+  } = useSortable({ 
+    id,
+    disabled: isImage && isSelected, // Disable sortable when image is selected
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -52,12 +220,14 @@ const SortableItem = ({ id, children, isSelected, onClick }) => {
     opacity: isDragging ? 0.5 : 1,
   };
 
+  // For images, don't apply drag listeners to allow internal dragging
+  const dragProps = isImage ? {} : { ...attributes, ...listeners };
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
+      {...dragProps}
       className={`canvas-item ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}
       onClick={onClick}
     >
@@ -82,7 +252,6 @@ const DraggableSidebarItem = ({ id, field }) => {
     transition,
   };
 
-  // Get icon based on type
   const getIcon = () => {
     switch (field.type) {
       case 'header':
@@ -127,7 +296,6 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [loading, setLoading] = useState(false);
   const [activeId, setActiveId] = useState(null);
-  const fileInputRef = useRef(null);
 
   const API_BASE = 'http://127.0.0.1:8000';
 
@@ -149,11 +317,9 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
     }
   }, [quotationData]);
 
-  // Initialize available fields from quotation data
   const initializeFields = () => {
     const fields = [];
     
-    // Add quotation fields dynamically
     Object.keys(quotationData.quotation).forEach((key) => {
       if (key !== 'id') {
         fields.push({
@@ -167,7 +333,6 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
       }
     });
 
-    // Add special elements
     fields.push(
       {
         id: 'header-title',
@@ -213,7 +378,6 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
     setAvailableFields(fields);
   };
 
-  // Load saved layout from server
   const loadSavedLayout = async () => {
     try {
       const response = await fetch(
@@ -231,7 +395,6 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
     }
   };
 
-  // Save layout to server
   const saveLayout = async () => {
     setLoading(true);
     try {
@@ -259,7 +422,6 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
     }
   };
 
-  // Format label
   const formatLabel = (key) => {
     return key
       .split('_')
@@ -267,7 +429,6 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
       .join(' ');
   };
 
-  // Calculate total cost
   const calculateTotal = () => {
     if (!quotationData.items) return 0;
     return quotationData.items.reduce((sum, item) => {
@@ -275,7 +436,6 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
     }, 0);
   };
 
-  // Handle image upload
   const handleImageUpload = (canvasId, file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -286,15 +446,39 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
       message.error('Failed to upload image');
     };
     reader.readAsDataURL(file);
-    return false; // Prevent automatic upload
+    return false;
   };
 
-  // Handle drag start
+  const handleImageResize = (canvasId, newWidth, newHeight) => {
+    setCanvasItems(
+      canvasItems.map((item) =>
+        item.canvasId === canvasId 
+          ? { ...item, width: newWidth, height: newHeight } 
+          : item
+      )
+    );
+    if (selectedItem?.canvasId === canvasId) {
+      setSelectedItem({ ...selectedItem, width: newWidth, height: newHeight });
+    }
+  };
+
+  const handleImageDragMove = (canvasId, x, y) => {
+    setCanvasItems(
+      canvasItems.map((item) =>
+        item.canvasId === canvasId 
+          ? { ...item, imageX: x, imageY: y } 
+          : item
+      )
+    );
+    if (selectedItem?.canvasId === canvasId) {
+      setSelectedItem({ ...selectedItem, imageX: x, imageY: y });
+    }
+  };
+
   const handleDragStart = (event) => {
     setActiveId(event.active.id);
   };
 
-  // Handle drag end
   const handleDragEnd = (event) => {
     const { active, over } = event;
     setActiveId(null);
@@ -304,7 +488,6 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
     const activeId = active.id;
     const overId = over.id;
 
-    // Check if dragging from sidebar to canvas
     if (String(activeId).startsWith('sidebar-')) {
       const fieldId = String(activeId).replace('sidebar-', '');
       const field = availableFields.find(f => f.id === fieldId);
@@ -319,23 +502,23 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
           color: '#000000',
           width: field.type === 'image' ? 200 : 400,
           height: field.type === 'image' ? 100 : undefined,
+          objectFit: field.type === 'image' ? 'contain' : undefined,
+          imageX: 0,
+          imageY: 0,
         };
 
-        // If dropping over an existing item, insert at that position
         if (String(overId).startsWith('canvas-')) {
           const overIndex = canvasItems.findIndex(item => item.canvasId === overId);
           const newCanvasItems = [...canvasItems];
           newCanvasItems.splice(overIndex >= 0 ? overIndex : canvasItems.length, 0, newItem);
           setCanvasItems(newCanvasItems);
         } else {
-          // Add to end if dropping on canvas container
           setCanvasItems([...canvasItems, newItem]);
         }
       }
       return;
     }
 
-    // Reordering within canvas
     if (String(activeId).startsWith('canvas-') && String(overId).startsWith('canvas-')) {
       const oldIndex = canvasItems.findIndex(item => item.canvasId === activeId);
       const newIndex = canvasItems.findIndex(item => item.canvasId === overId);
@@ -346,7 +529,6 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
     }
   };
 
-  // Remove item from canvas
   const removeFromCanvas = (canvasId) => {
     setCanvasItems(canvasItems.filter((item) => item.canvasId !== canvasId));
     if (selectedItem?.canvasId === canvasId) {
@@ -354,7 +536,6 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
     }
   };
 
-  // Update item properties
   const updateItemProperty = (canvasId, property, value) => {
     setCanvasItems(
       canvasItems.map((item) =>
@@ -366,7 +547,6 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
     }
   };
 
-  // Render canvas item content
   const renderCanvasItem = (item) => {
     switch (item.type) {
       case 'header':
@@ -475,34 +655,22 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
 
       case 'image':
         return (
-          <div style={{ textAlign: item.textAlign || 'center' }}>
-            {item.value ? (
-              <img
-                src={item.value}
-                alt="Uploaded"
-                style={{
-                  width: `${item.width}px`,
-                  height: item.height ? `${item.height}px` : 'auto',
-                  maxWidth: '100%',
-                  objectFit: 'contain',
-                }}
-              />
-            ) : (
-              <div
-                style={{
-                  width: `${item.width}px`,
-                  height: `${item.height || 100}px`,
-                  border: '2px dashed #d9d9d9',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#999',
-                  borderRadius: '4px',
-                }}
-              >
-                <PictureOutlined style={{ fontSize: '32px' }} />
-              </div>
-            )}
+          <div style={{ 
+            textAlign: item.textAlign || 'center',
+            display: 'flex',
+            justifyContent: item.textAlign === 'left' ? 'flex-start' : 
+                           item.textAlign === 'right' ? 'flex-end' : 'center'
+          }}>
+            <ResizableImage
+              item={item}
+              isSelected={selectedItem?.canvasId === item.canvasId}
+              onResize={(w, h) => handleImageResize(item.canvasId, w, h)}
+              onDragMove={(x, y) => handleImageDragMove(item.canvasId, x, y)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedItem(item);
+              }}
+            />
           </div>
         );
 
@@ -511,14 +679,12 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
     }
   };
 
-  // Print function
   const handlePrint = () => {
     window.print();
   };
 
   return (
     <div className="quotation-designer">
-      {/* Header */}
       <div className="designer-header">
         <Button icon={<ArrowLeftOutlined />} onClick={onBack} size="large">
           Back
@@ -549,7 +715,6 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
         onDragEnd={handleDragEnd}
       >
         <div className="designer-content">
-          {/* Left Sidebar - Available Fields */}
           <div className="sidebar">
             <div className="sidebar-header">
               <Title level={5}>Available Elements</Title>
@@ -572,7 +737,6 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
             </SortableContext>
           </div>
 
-          {/* Center - A4 Canvas */}
           <div className="canvas-container">
             <div className="canvas-wrapper">
               <SortableContext
@@ -593,12 +757,17 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
                       key={item.canvasId}
                       id={item.canvasId}
                       isSelected={selectedItem?.canvasId === item.canvasId}
+                      isImage={item.type === 'image'}
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedItem(item);
                       }}
                     >
-                      <div style={{ width: item.type === 'table' ? '100%' : `${item.width}px` }}>
+                      <div style={{ 
+                        width: item.type === 'table' ? '100%' : 
+                               item.type === 'image' ? 'auto' : `${item.width}px`,
+                        maxWidth: '100%'
+                      }}>
                         {renderCanvasItem(item)}
                       </div>
                       <button
@@ -617,7 +786,6 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
             </div>
           </div>
 
-          {/* Right Sidebar - Properties */}
           <div className="properties-panel">
             <div className="sidebar-header">
               <Title level={5}>Properties</Title>
@@ -628,7 +796,6 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
 
             {selectedItem ? (
               <div className="properties-content">
-                {/* Image Upload for Image type */}
                 {selectedItem.type === 'image' && (
                   <div className="property-group">
                     <label>Upload Image</label>
@@ -642,20 +809,24 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
                       </Button>
                     </Upload>
                     {selectedItem.value && (
-                      <Button
-                        danger
-                        block
-                        icon={<DeleteOutlined />}
-                        onClick={() => updateItemProperty(selectedItem.canvasId, 'value', null)}
-                        style={{ marginTop: '8px' }}
-                      >
-                        Remove Image
-                      </Button>
+                      <>
+                        <Button
+                          danger
+                          block
+                          icon={<DeleteOutlined />}
+                          onClick={() => updateItemProperty(selectedItem.canvasId, 'value', null)}
+                          style={{ marginTop: '8px' }}
+                        >
+                          Remove Image
+                        </Button>
+                        <Text type="secondary" style={{ fontSize: '12px', marginTop: '8px', display: 'block' }}>
+                          💡 Click and drag the image to resize it. Drag from the corners to adjust size.
+                        </Text>
+                      </>
                     )}
                   </div>
                 )}
 
-                {/* Font Size (not for divider) */}
                 {selectedItem.type !== 'divider' && selectedItem.type !== 'image' && (
                   <div className="property-group">
                     <label>Font Size (px)</label>
@@ -671,7 +842,6 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
                   </div>
                 )}
 
-                {/* Font Weight (not for divider and image) */}
                 {selectedItem.type !== 'divider' && selectedItem.type !== 'image' && (
                   <div className="property-group">
                     <label>Font Weight</label>
@@ -690,10 +860,9 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
                   </div>
                 )}
 
-                {/* Text Align */}
                 {selectedItem.type !== 'divider' && (
                   <div className="property-group">
-                    <label>Align</label>
+                    <label>{selectedItem.type === 'image' ? 'Position' : 'Align'}</label>
                     <Select
                       value={selectedItem.textAlign}
                       onChange={(value) =>
@@ -705,10 +874,14 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
                       <Select.Option value="center">Center</Select.Option>
                       <Select.Option value="right">Right</Select.Option>
                     </Select>
+                    {selectedItem.type === 'image' && (
+                      <Text type="secondary" style={{ fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                        Image position on the canvas
+                      </Text>
+                    )}
                   </div>
                 )}
 
-                {/* Text Color (not for divider and image) */}
                 {selectedItem.type !== 'divider' && selectedItem.type !== 'image' && (
                   <div className="property-group">
                     <label>Text Color</label>
@@ -722,8 +895,7 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
                   </div>
                 )}
 
-                {/* Width */}
-                {selectedItem.type !== 'table' && (
+                {selectedItem.type !== 'table' && selectedItem.type !== 'image' && (
                   <div className="property-group">
                     <label>Width (px)</label>
                     <Input
@@ -732,29 +904,67 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
                       onChange={(e) =>
                         updateItemProperty(selectedItem.canvasId, 'width', e.target.value)
                       }
-                      min={100}
+                      min={50}
                       max={700}
                     />
                   </div>
                 )}
 
-                {/* Height (for images) */}
                 {selectedItem.type === 'image' && (
-                  <div className="property-group">
-                    <label>Height (px)</label>
-                    <Input
-                      type="number"
-                      value={selectedItem.height || 100}
-                      onChange={(e) =>
-                        updateItemProperty(selectedItem.canvasId, 'height', e.target.value)
-                      }
-                      min={50}
-                      max={500}
-                    />
-                  </div>
+                  <>
+                    <div className="property-group">
+                      <label>Width (px)</label>
+                      <Input
+                        type="number"
+                        value={selectedItem.width || 200}
+                        onChange={(e) =>
+                          updateItemProperty(selectedItem.canvasId, 'width', e.target.value)
+                        }
+                        min={50}
+                        max={700}
+                      />
+                      <Text type="secondary" style={{ fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                        Or drag corners on image to resize
+                      </Text>
+                    </div>
+
+                    <div className="property-group">
+                      <label>Height (px)</label>
+                      <Input
+                        type="number"
+                        value={selectedItem.height || 100}
+                        onChange={(e) =>
+                          updateItemProperty(selectedItem.canvasId, 'height', e.target.value)
+                        }
+                        min={50}
+                        max={500}
+                      />
+                      <Text type="secondary" style={{ fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                        Or drag corners on image to resize
+                      </Text>
+                    </div>
+
+                    <div className="property-group">
+                      <label>Image Fit</label>
+                      <Select
+                        value={selectedItem.objectFit || 'contain'}
+                        onChange={(value) =>
+                          updateItemProperty(selectedItem.canvasId, 'objectFit', value)
+                        }
+                        style={{ width: '100%' }}
+                      >
+                        <Select.Option value="contain">Contain (fit inside)</Select.Option>
+                        <Select.Option value="cover">Cover (fill area)</Select.Option>
+                        <Select.Option value="fill">Fill (stretch)</Select.Option>
+                        <Select.Option value="scale-down">Scale Down</Select.Option>
+                      </Select>
+                      <Text type="secondary" style={{ fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                        How image fills the space
+                      </Text>
+                    </div>
+                  </>
                 )}
 
-                {/* Content (for text and header) */}
                 {(selectedItem.type === 'text' || selectedItem.type === 'header') && (
                   <div className="property-group">
                     <label>Content</label>
@@ -769,7 +979,6 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
                 )}
 
                 <Divider />
-
                 <Button
                   danger
                   block
