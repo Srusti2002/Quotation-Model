@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -1183,134 +1184,150 @@ def get_column_order():
         raise HTTPException(status_code=500, detail=str(e))
     
 
-# Add this model for quotation layouts
-class QuotationLayoutRequest(BaseModel):
-    layout: List[Dict[str, Any]]
+# Add this model for global quotation template
+class QuotationTemplateRequest(BaseModel):
+    template: List[Dict[str, Any]]
 
-# Add quotation_layouts table
-quotation_layouts_table = Table(
-    "quotation_layouts",
+# Add global_quotation_template table
+global_quotation_template_table = Table(
+    "global_quotation_template",
     metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("quotation_id", Integer),
     Column("user_id", String, default="default"),
-    Column("layout_data", String)  # Store JSON as string
+    Column("template_data", String),  # Store JSON as string
+    Column("created_at", String),
+    Column("updated_at", String)
 )
 
 # Create the table
 metadata.create_all(engine)
 
 # ============================================================
-#         QUOTATION LAYOUT ENDPOINTS
+#         GLOBAL QUOTATION TEMPLATE ENDPOINTS
 # ============================================================
 
-@app.post("/user-preferences/quotation-layout/{quotation_id}")
-def save_quotation_layout(quotation_id: int, req: QuotationLayoutRequest):
+@app.post("/user-preferences/global-quotation-template")
+def save_global_template(req: QuotationTemplateRequest):
     """
-    Save a custom layout for a specific quotation
+    Save a global template that applies to all quotations.
+    This template structure will be used for all quotations with their respective data.
     """
     try:
-        # Check if layout exists for this quotation
+        from datetime import datetime
+        print(f"DEBUG: Saving global template with {len(req.template)} items...")
+        timestamp = datetime.now().isoformat()
+        
+        # Check if global template exists
         check_sql = text("""
-            SELECT id FROM quotation_layouts 
-            WHERE quotation_id = :qid AND user_id = :uid
+            SELECT id FROM global_quotation_template 
+            WHERE user_id = :uid
         """)
         
         with engine.begin() as conn:
             existing = conn.execute(check_sql, {
-                "qid": quotation_id,
                 "uid": "default"
             }).fetchone()
             
+            print(f"DEBUG: Existing template: {existing}")
+            
             if existing:
-                # Update existing layout
+                # Update existing template
+                print("DEBUG: Updating existing template...")
                 update_sql = text("""
-                    UPDATE quotation_layouts 
-                    SET layout_data = :data
+                    UPDATE global_quotation_template 
+                    SET template_data = :data, updated_at = :updated
                     WHERE id = :id
                 """)
                 conn.execute(update_sql, {
-                    "data": json.dumps(req.layout),
+                    "data": json.dumps(req.template),
+                    "updated": timestamp,
                     "id": existing[0]
                 })
             else:
-                # Insert new layout
+                # Insert new template
+                print("DEBUG: Inserting new template...")
                 insert_sql = text("""
-                    INSERT INTO quotation_layouts (quotation_id, user_id, layout_data)
-                    VALUES (:qid, :uid, :data)
+                    INSERT INTO global_quotation_template (user_id, template_data, created_at, updated_at)
+                    VALUES (:uid, :data, :created, :updated)
                 """)
                 conn.execute(insert_sql, {
-                    "qid": quotation_id,
                     "uid": "default",
-                    "data": json.dumps(req.layout)
+                    "data": json.dumps(req.template),
+                    "created": timestamp,
+                    "updated": timestamp
                 })
         
+        print("DEBUG: Template saved successfully!")
         return {
             "status": "success",
-            "message": "Layout saved successfully",
-            "quotation_id": quotation_id
+            "message": "Global template saved successfully. This template will be applied to all quotations."
         }
         
     except Exception as e:
-        print(f"Error in save_quotation_layout: {str(e)}")
+        import traceback
+        print(f"ERROR in save_global_template: {str(e)}")
+        print(f"TRACEBACK: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/user-preferences/quotation-layout/{quotation_id}")
-def get_quotation_layout(quotation_id: int):
+@app.get("/user-preferences/global-quotation-template")
+def get_global_template():
     """
-    Get the saved layout for a specific quotation
+    Get the global template that applies to all quotations
     """
     try:
+        print("DEBUG: Fetching global template...")
         sql = text("""
-            SELECT layout_data FROM quotation_layouts 
-            WHERE quotation_id = :qid AND user_id = :uid
+            SELECT template_data FROM global_quotation_template 
+            WHERE user_id = :uid
         """)
         
         with engine.connect() as conn:
             result = conn.execute(sql, {
-                "qid": quotation_id,
                 "uid": "default"
             }).fetchone()
             
+            print(f"DEBUG: Query result: {result}")
+            
             if result and result[0]:
+                print(f"DEBUG: Found template data, parsing JSON...")
                 return {
-                    "quotation_id": quotation_id,
-                    "layout": json.loads(result[0])
+                    "template": json.loads(result[0])
                 }
             else:
+                print("DEBUG: No template found, returning empty array")
                 return {
-                    "quotation_id": quotation_id,
-                    "layout": []
+                    "template": []
                 }
                 
     except Exception as e:
-        print(f"Error in get_quotation_layout: {str(e)}")
+        import traceback
+        print(f"ERROR in get_global_template: {str(e)}")
+        print(f"TRACEBACK: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.delete("/user-preferences/quotation-layout/{quotation_id}")
-def delete_quotation_layout(quotation_id: int):
+@app.delete("/user-preferences/global-quotation-template")
+def delete_global_template():
     """
-    Delete a saved layout for a specific quotation
+    Delete the global template
     """
     try:
         delete_sql = text("""
-            DELETE FROM quotation_layouts 
-            WHERE quotation_id = :qid AND user_id = :uid
+            DELETE FROM global_quotation_template 
+            WHERE user_id = :uid
         """)
         
         with engine.begin() as conn:
             result = conn.execute(delete_sql, {
-                "qid": quotation_id,
                 "uid": "default"
             })
             
         return {
             "status": "success",
-            "message": "Layout deleted successfully"
+            "message": "Global template deleted successfully"
         }
         
     except Exception as e:
-        print(f"Error in delete_quotation_layout: {str(e)}")
+        print(f"Error in delete_global_template: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

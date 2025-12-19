@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Button, Typography, message, Divider, Input, Select, Upload } from 'antd';
 import {
@@ -381,17 +382,17 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
   const loadSavedLayout = async () => {
     try {
       const response = await fetch(
-        `${API_BASE}/user-preferences/quotation-layout/${quotationData.quotation.id}`
+        `${API_BASE}/user-preferences/global-quotation-template`
       );
       
       if (response.ok) {
         const data = await response.json();
-        if (data.layout && data.layout.length > 0) {
-          setCanvasItems(data.layout);
+        if (data.template && data.template.length > 0) {
+          setCanvasItems(data.template);
         }
       }
     } catch (error) {
-      console.error('Failed to load saved layout:', error);
+      console.error('Failed to load saved template:', error);
     }
   };
 
@@ -399,23 +400,24 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
     setLoading(true);
     try {
       const response = await fetch(
-        `${API_BASE}/user-preferences/quotation-layout/${quotationData.quotation.id}`,
+        `${API_BASE}/user-preferences/global-quotation-template`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ layout: canvasItems }),
+          body: JSON.stringify({ template: canvasItems }),
         }
       );
 
       if (response.ok) {
-        message.success('Layout saved successfully!');
+        const result = await response.json();
+        message.success('Global template saved! This template will be applied to all quotations.');
       } else {
-        message.error('Failed to save layout');
+        message.error('Failed to save template');
       }
     } catch (error) {
-      message.error('Failed to save layout');
+      message.error('Failed to save template');
       console.error(error);
     } finally {
       setLoading(false);
@@ -689,9 +691,14 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
         <Button icon={<ArrowLeftOutlined />} onClick={onBack} size="large">
           Back
         </Button>
-        <Title level={3} style={{ margin: 0 }}>
-          Quotation Designer - ID: {quotationData?.quotation?.id}
-        </Title>
+        <div style={{ flex: 1, textAlign: 'center' }}>
+          <Title level={3} style={{ margin: 0 }}>
+            Global Quotation Template Designer
+          </Title>
+          <Text type="secondary" style={{ fontSize: '14px' }}>
+            Designing for: {quotationData?.quotation?.customer_name || `Quotation #${quotationData?.quotation?.id}`}
+          </Text>
+        </div>
         <div style={{ display: 'flex', gap: '12px' }}>
           <Button icon={<PrinterOutlined />} onClick={handlePrint} size="large">
             Print
@@ -703,7 +710,7 @@ const QuotationDesigner = ({ quotationData, onBack }) => {
             loading={loading}
             size="large"
           >
-            Save Layout
+            Save Global Template
           </Button>
         </div>
       </div>

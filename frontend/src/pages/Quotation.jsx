@@ -67,6 +67,9 @@ const Quotation = () => {
   const [designerMode, setDesignerMode] = useState(false);
   const [designerData, setDesignerData] = useState(null);
 
+  // Global template state
+  const [globalTemplate, setGlobalTemplate] = useState([]);
+
   const API_BASE = 'http://127.0.0.1:8000';
 
   const sensors = useSensors(
@@ -160,9 +163,25 @@ const Quotation = () => {
     const initializeData = async () => {
       await fetchColumns();
       await fetchData();
+      await loadGlobalTemplate();
     };
     initializeData();
   }, []);
+
+  // Load global template
+  const loadGlobalTemplate = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/user-preferences/global-quotation-template`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.template && data.template.length > 0) {
+          setGlobalTemplate(data.template);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load global template:', error);
+    }
+  };
 
   // Helper function to format column names
   const formatLabel = (columnName) => {
@@ -352,6 +371,152 @@ const Quotation = () => {
     }, 0);
   };
 
+  // Render template item with current quotation data
+  const renderTemplateItem = (item, quotationData) => {
+    switch (item.type) {
+      case 'header':
+        return (
+          <div
+            key={item.canvasId}
+            style={{
+              fontSize: `${item.fontSize}px`,
+              fontWeight: item.fontWeight,
+              textAlign: item.textAlign,
+              color: item.color,
+              marginBottom: '16px',
+            }}
+          >
+            {item.value}
+          </div>
+        );
+
+      case 'field':
+        const fieldValue = quotationData.quotation[item.fieldKey] || '-';
+        return (
+          <div key={item.canvasId} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+            <strong style={{ fontSize: `${item.fontSize}px`, color: item.color }}>
+              {item.label}:
+            </strong>
+            <span style={{ fontSize: `${item.fontSize}px`, color: item.color }}>
+              {fieldValue}
+            </span>
+          </div>
+        );
+
+      case 'table':
+        return (
+          <div key={item.canvasId} style={{ width: '100%', overflow: 'auto', marginBottom: '16px' }}>
+            <table
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                fontSize: `${item.fontSize || 12}px`,
+              }}
+            >
+              <thead>
+                <tr style={{ backgroundColor: '#f0f0f0' }}>
+                  <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'left' }}>Sl.No</th>
+                  {itemsColumns.map((col) => (
+                    <th key={col.column_name} style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'left' }}>
+                      {formatLabel(col.column_name)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {quotationData.items.map((rowItem, index) => (
+                  <tr key={index}>
+                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>{index + 1}</td>
+                    {itemsColumns.map((col) => {
+                      const value = rowItem[col.column_name];
+                      const isMoney = col.column_name.includes('rate') || col.column_name.includes('cost');
+                      const displayValue = isMoney && value ? `₹ ${Number(value).toFixed(2)}` : value || '-';
+                      return (
+                        <td
+                          key={col.column_name}
+                          style={{ border: '1px solid #ddd', padding: '8px', textAlign: isMoney ? 'right' : 'left' }}
+                        >
+                          {displayValue}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+
+      case 'total':
+        return (
+          <div
+            key={item.canvasId}
+            style={{
+              fontSize: `${item.fontSize}px`,
+              fontWeight: item.fontWeight,
+              textAlign: item.textAlign,
+              color: item.color,
+              padding: '12px',
+              border: '2px solid #1890ff',
+              borderRadius: '8px',
+              backgroundColor: '#e6f7ff',
+              marginBottom: '16px',
+            }}
+          >
+            <strong>Total Cost:</strong> ₹ {calculateTotal(quotationData.items).toFixed(2)}
+          </div>
+        );
+
+      case 'divider':
+        return <Divider key={item.canvasId} style={{ margin: '8px 0' }} />;
+
+      case 'text':
+        return (
+          <div
+            key={item.canvasId}
+            style={{
+              fontSize: `${item.fontSize}px`,
+              fontWeight: item.fontWeight,
+              textAlign: item.textAlign,
+              color: item.color,
+              whiteSpace: 'pre-wrap',
+              marginBottom: '12px',
+            }}
+          >
+            {item.value}
+          </div>
+        );
+
+      case 'image':
+        if (!item.value) return null;
+        return (
+          <div
+            key={item.canvasId}
+            style={{
+              textAlign: item.textAlign || 'center',
+              display: 'flex',
+              justifyContent: item.textAlign === 'left' ? 'flex-start' :
+                             item.textAlign === 'right' ? 'flex-end' : 'center',
+              marginBottom: '16px',
+            }}
+          >
+            <img
+              src={item.value}
+              alt="Template Image"
+              style={{
+                width: `${item.width}px`,
+                height: `${item.height}px`,
+                objectFit: item.objectFit || 'contain',
+              }}
+            />
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
   // If in designer mode, show designer
   if (designerMode) {
     return (
@@ -444,7 +609,7 @@ const Quotation = () => {
             boxShadow: '0 4px 12px rgba(82, 196, 26, 0.3)',
           }}
         >
-          Design Quotation
+          Design Quotation Template
         </Button>
       </div>
 
@@ -471,7 +636,7 @@ const Quotation = () => {
         />
       </div>
 
-      {/* View Modal - A4 Size */}
+      {/* View Modal - A4 Size with Global Template */}
       <Modal
         title={null}
         open={viewModalOpen}
@@ -484,109 +649,111 @@ const Quotation = () => {
         {selectedQuotationData && (
           <div className="a4-wrapper">
             <div className="a4-page">
-              {/* Header */}
-              <div className="a4-head">
-                <Title level={3} style={{ margin: 0, marginBottom: 8 }}>
-                  QUOTATION
-                </Title>
-                <div className="subtitle">
-                  Quotation ID: {selectedQuotationData.quotation.id}
+              {globalTemplate.length > 0 ? (
+                <div style={{ padding: '20px' }}>
+                  {globalTemplate.map((item) => renderTemplateItem(item, selectedQuotationData))}
                 </div>
-              </div>
-
-              <Divider style={{ margin: '12px 0 18px' }} />
-
-              {/* Quotation and Customer Details - compact grid with drag & drop */}
-              <div className="a4-section">
-                <div className="a4-section-title">
-                  <Title level={5} style={{ margin: 0 }}>
-                    Quotation & Customer Details
-                  </Title>
-                  <small>Drag cards to reorder (order saved permanently)</small>
-                </div>
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleDragEnd}
-                >
-                  <SortableContext items={quotationColumns.map(col => col.column_name)}>
-                    <div className="details-grid">
-                      {quotationColumns.map((col) => (
-                        <SortableCard key={col.column_name} id={col.column_name}>
-                          <div className="detail-card">
-                            <div className="detail-label">{formatLabel(col.column_name)}</div>
-                            <div className="detail-value">
-                              {selectedQuotationData.quotation[col.column_name] || '-'}
-                            </div>
-                          </div>
-                        </SortableCard>
-                      ))}
+              ) : (
+                <>
+                  <div className="a4-head">
+                    <Title level={3} style={{ margin: 0, marginBottom: 8 }}>
+                      QUOTATION
+                    </Title>
+                    <div className="subtitle">
+                      Quotation ID: {selectedQuotationData.quotation.id}
                     </div>
-                  </SortableContext>
-                </DndContext>
-              </div>
-
-              {/* Items Details Table */}
-              <div className="a4-section">
-                <div className="a4-section-title">
-                  <Title level={5} style={{ margin: 0 }}>
-                    Items Details
-                  </Title>
-                  <small>Columns wrap to stay inside A4 view</small>
-                </div>
-                <div className="items-table">
-                  <div className="table-scroll">
-                    <table className="a4-table">
-                      <thead>
-                        <tr>
-                          <th style={{ width: 70 }}>Sl.No</th>
-                          {itemsColumns.map((col) => (
-                            <th key={col.column_name}>{formatLabel(col.column_name)}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedQuotationData.items.map((item, index) => (
-                          <tr key={item.id}>
-                            <td>{index + 1}</td>
-                            {itemsColumns.map((col) => {
-                              const value = item[col.column_name];
-                              const isMoney = col.column_name.includes('rate') || col.column_name.includes('cost');
-                              const displayValue =
-                                isMoney && value
-                                  ? `₹ ${Number(value).toFixed(2)}`
-                                  : value || '-';
-
-                              return (
-                                <td
-                                  key={col.column_name}
-                                  style={{ textAlign: isMoney ? 'right' : 'left' }}
-                                >
-                                  {displayValue}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
                   </div>
-                </div>
-              </div>
 
-              {/* Total Cost - Lower Right */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24, position: 'relative', zIndex: 2 }}>
-                <div className="totals-box">
-                  <span className="label">Total Cost:</span>
-                  <span className="value">₹ {calculateTotal(selectedQuotationData.items).toFixed(2)}</span>
-                </div>
-              </div>
+                  <Divider style={{ margin: '12px 0 18px' }} />
 
-              {/* Footer */}
-              <div className="footer-note">
-                <Divider style={{ margin: '20px 0 12px' }} />
-                This is a system-generated quotation
-              </div>
+                  <div className="a4-section">
+                    <div className="a4-section-title">
+                      <Title level={5} style={{ margin: 0 }}>
+                        Quotation & Customer Details
+                      </Title>
+                      <small>No global template found. Click "Design Quotation Template" to create one.</small>
+                    </div>
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <SortableContext items={quotationColumns.map(col => col.column_name)}>
+                        <div className="details-grid">
+                          {quotationColumns.map((col) => (
+                            <SortableCard key={col.column_name} id={col.column_name}>
+                              <div className="detail-card">
+                                <div className="detail-label">{formatLabel(col.column_name)}</div>
+                                <div className="detail-value">
+                                  {selectedQuotationData.quotation[col.column_name] || '-'}
+                                </div>
+                              </div>
+                            </SortableCard>
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  </div>
+
+                  <div className="a4-section">
+                    <div className="a4-section-title">
+                      <Title level={5} style={{ margin: 0 }}>
+                        Items Details
+                      </Title>
+                    </div>
+                    <div className="items-table">
+                      <div className="table-scroll">
+                        <table className="a4-table">
+                          <thead>
+                            <tr>
+                              <th style={{ width: 70 }}>Sl.No</th>
+                              {itemsColumns.map((col) => (
+                                <th key={col.column_name}>{formatLabel(col.column_name)}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedQuotationData.items.map((item, index) => (
+                              <tr key={item.id}>
+                                <td>{index + 1}</td>
+                                {itemsColumns.map((col) => {
+                                  const value = item[col.column_name];
+                                  const isMoney = col.column_name.includes('rate') || col.column_name.includes('cost');
+                                  const displayValue =
+                                    isMoney && value
+                                      ? `₹ ${Number(value).toFixed(2)}`
+                                      : value || '-';
+
+                                  return (
+                                    <td
+                                      key={col.column_name}
+                                      style={{ textAlign: isMoney ? 'right' : 'left' }}
+                                    >
+                                      {displayValue}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24, position: 'relative', zIndex: 2 }}>
+                    <div className="totals-box">
+                      <span className="label">Total Cost:</span>
+                      <span className="value">₹ {calculateTotal(selectedQuotationData.items).toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  <div className="footer-note">
+                    <Divider style={{ margin: '20px 0 12px' }} />
+                    This is a system-generated quotation
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
